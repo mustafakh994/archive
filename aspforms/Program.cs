@@ -1,0 +1,364 @@
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using System.Text;
+using FormsManagementApi.Configuration;
+using FormsManagementApi.Data;
+using FormsManagementApi.Middleware;
+using FormsManagementApi.Services;
+using FormsManagementApi.Models;
+using FluentValidation.AspNetCore;
+using FluentValidation;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+// Configure Swagger/OpenAPI
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Forms Management API",
+        Version = "v1",
+        Description = "A comprehensive API for managing forms in a multi-tenant environment",
+        Contact = new OpenApiContact
+        {
+            Name = "Forms Management Team",
+            Email = "support@formsmanagement.com"
+        }
+    });
+
+    // Configure JWT authentication for Swagger
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
+                Scheme = "oauth2",
+                Name = "Bearer",
+                In = ParameterLocation.Header,
+            },
+            new List<string>()
+        }
+    });
+
+    // Include XML comments if available
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+    {
+        c.IncludeXmlComments(xmlPath);
+    }
+});
+
+// Configure JWT Settings
+var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>();
+if (jwtSettings == null)
+{
+    throw new InvalidOperationException("JWT settings are not configured properly.");
+}
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSettings.SectionName));
+
+// Configure Entity Framework
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Database connection string is not configured.");
+}
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+// Configure JWT Authentication
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false; // Set to true in production
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtSettings.SecretKey)),
+        ValidateIssuer = true,
+        ValidIssuer = jwtSettings.Issuer,
+        ValidateAudience = true,
+        ValidAudience = jwtSettings.Audience,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+});
+
+// Configure Authorization
+builder.Services.AddAuthorization();
+
+// Configure AutoMapper
+builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
+
+// Configure FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+// Register Services
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IDepartmentService, DepartmentService>();
+builder.Services.AddScoped<IRoleService, RoleService>();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IFormService, FormService>();
+builder.Services.AddScoped<IFormSubmissionService, FormSubmissionService>();
+builder.Services.AddScoped<IAssignmentService, AssignmentService>();
+builder.Services.AddScoped<IFileService, FileService>();
+builder.Services.AddScoped<IExportTransformationService, ExportTransformationService>();
+builder.Services.AddScoped<IServerExportService, ServerExportService>();
+// builder.Services.AddScoped<IWebhookService, WebhookService>();
+// builder.Services.AddScoped<ISuperAdminUserService, SuperAdminUserService>();
+
+// Register HttpClient for webhook service - temporarily commented out
+// builder.Services.AddHttpClient<IWebhookService, WebhookService>();
+
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+    
+    options.AddPolicy("Production", policy =>
+    {
+        policy.WithOrigins(
+                "https://forms.hamaprov.net",
+                "http://localhost:3000",
+                "http://localhost:3001"
+              )
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
+
+// Configure JSON options
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.WriteIndented = true;
+});
+
+builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.WriteIndented = true;
+});
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+
+// Global exception handling middleware
+app.UseExceptionHandler("/error");
+
+app.UseHttpsRedirection();
+
+// Configure CORS
+var environment = app.Environment;
+if (environment.IsProduction())
+{
+    app.UseCors("Production");
+}
+else
+{
+    app.UseCors("AllowAll");
+}
+
+// Configure Authentication & Authorization
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Configure custom middleware
+app.UseDepartmentMiddleware();
+
+app.MapControllers();
+
+// Ensure database is created and seeded
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        context.Database.EnsureCreated();
+        // In production, use migrations instead: context.Database.Migrate();
+        
+        // Update user passwords with proper hashes
+        await UpdateUserPasswords(context, logger);
+        await SeedRolesAsync(context, logger);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "An error occurred while creating/seeding the database.");
+    }
+}
+
+static async Task UpdateUserPasswords(ApplicationDbContext context, ILogger logger)
+{
+    try
+    {
+        // Check if users exist, if not create them
+        var userCount = await context.Users.CountAsync();
+        if (userCount == 0)
+        {
+            logger.LogInformation("Creating seed users...");
+            
+            // Get departments and roles
+            var hrDept = await context.Departments.FirstOrDefaultAsync(d => d.Code == "HR");
+            var superAdminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name.ToLower() == "superadmin");
+            var departmentAdminRole = await context.Roles.FirstOrDefaultAsync(r => r.Name.ToLower() == "departmentadmin");
+            
+            if (hrDept != null && superAdminRole != null && departmentAdminRole != null)
+            {
+                var users = new[]
+                {
+                    new User
+                    {
+                        Id = Guid.Parse("50000000-0000-0000-0000-000000000001"),
+                        DepartmentId = hrDept.Id,
+                        RoleId = superAdminRole.Id,
+                        Name = "Super Administrator",
+                        Email = "superadmin@hamaprov.net",
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("PAssW0RD2o024!"),
+                        IsActive = true,
+                        CreatedAt = DateTimeOffset.UtcNow,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    },
+                    new User
+                    {
+                        Id = Guid.Parse("50000000-0000-0000-0000-000000000002"),
+                        DepartmentId = hrDept.Id,
+                        RoleId = departmentAdminRole.Id,
+                        Name = "Department Administrator",
+                        Email = "deptadmin@hamaprov.net",
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("PAssW0RD2o024!"),
+                        IsActive = true,
+                        CreatedAt = DateTimeOffset.UtcNow,
+                        UpdatedAt = DateTimeOffset.UtcNow
+                    }
+                };
+                
+                context.Users.AddRange(users);
+                await context.SaveChangesAsync();
+                
+                logger.LogInformation("Seed users created successfully with PAssW0RD2o024!");
+            }
+        }
+        else
+        {
+            logger.LogInformation($"Found {userCount} existing users.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error updating user passwords.");
+    }
+}
+
+static async Task SeedRolesAsync(ApplicationDbContext context, ILogger logger)
+{
+    try
+    {
+        var existingRoles = await context.Roles.ToListAsync();
+        var hasSuperAdmin = existingRoles.Any(r => string.Equals(r.Name, "SuperAdmin", StringComparison.OrdinalIgnoreCase));
+        var hasDepartmentAdmin = existingRoles.Any(r => string.Equals(r.Name, "DepartmentAdmin", StringComparison.OrdinalIgnoreCase));
+
+        if (hasSuperAdmin && hasDepartmentAdmin)
+        {
+            logger.LogInformation("Roles already seeded. No action taken.");
+            return;
+        }
+
+        var defaultDepartment = await context.Departments
+            .OrderBy(d => d.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (defaultDepartment == null)
+        {
+            logger.LogWarning("Unable to seed roles because no departments exist.");
+            return;
+        }
+
+        var utcNow = DateTimeOffset.UtcNow;
+        var rolesToAdd = new List<Role>();
+
+        if (!hasSuperAdmin)
+        {
+            rolesToAdd.Add(new Role
+            {
+                Id = Guid.Parse("30000000-0000-0000-0000-000000000001"),
+                DepartmentId = defaultDepartment.Id,
+                Name = "SuperAdmin",
+                DisplayName = "Super Administrator",
+                Description = "System-wide administrative access with full permissions",
+                IsSystemRole = true,
+                IsActive = true,
+                CreatedAt = utcNow,
+                UpdatedAt = utcNow
+            });
+        }
+
+        if (!hasDepartmentAdmin)
+        {
+            rolesToAdd.Add(new Role
+            {
+                Id = Guid.Parse("30000000-0000-0000-0000-000000000002"),
+                DepartmentId = defaultDepartment.Id,
+                Name = "DepartmentAdmin",
+                DisplayName = "Department Administrator",
+                Description = "Department-level administrative access",
+                IsSystemRole = true,
+                IsActive = true,
+                CreatedAt = utcNow,
+                UpdatedAt = utcNow
+            });
+        }
+
+        if (rolesToAdd.Count == 0)
+        {
+            logger.LogInformation("No new roles needed seeding.");
+            return;
+        }
+
+        await context.Roles.AddRangeAsync(rolesToAdd);
+        await context.SaveChangesAsync();
+        logger.LogInformation("Seeded {Count} role(s) into the Roles table.", rolesToAdd.Count);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to seed roles table.");
+    }
+}
+app.Run();

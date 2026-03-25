@@ -1,0 +1,101 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: forms-management-db
+    environment:
+      - POSTGRES_DB=FormsManagementDb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=YourStrong!Passw0rd
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - forms-management-network
+    restart: unless-stopped
+
+  # pgAdmin - PostgreSQL Web GUI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: forms-management-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin123
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    ports:
+      - "8081:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - forms-management-network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # Adminer - Lightweight Database Management
+  adminer:
+    image: adminer:latest
+    container_name: forms-management-adminer
+    ports:
+      - "8082:8080"
+    networks:
+      - forms-management-network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # Forms Management API
+  api:
+    build:
+      context: .
+      dockerfile: FormsManagementApi/Dockerfile
+    container_name: forms-management-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=FormsManagementDb;Username=postgres;Password=YourStrong!Passw0rd
+      - JwtSettings__SecretKey=ProductionSecretKeyThatIsAtLeast32CharactersLongForSecurity!
+      - JwtSettings__Issuer=FormsManagementAPI
+      - JwtSettings__Audience=FormsManagementClients
+      - JwtSettings__ExpirationInMinutes=60
+      - JwtSettings__RefreshTokenExpirationInDays=7
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+    networks:
+      - forms-management-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache (optional, for future caching needs)
+  redis:
+    image: redis:7-alpine
+    container_name: forms-management-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - forms-management-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  forms-management-network:
+    driver: bridge

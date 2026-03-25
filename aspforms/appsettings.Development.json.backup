@@ -1,0 +1,19 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Database=forms_pg_db;Username=admin;Password=Pg2024SecurePass_xK9mN7pQ"
+  },
+  "JwtSettings": {
+    "SecretKey": "DevelopmentSecretKeyThatIsAtLeast32CharactersLong!",
+    "Issuer": "FormsManagementAPI_Dev",
+    "Audience": "FormsManagementClients_Dev",
+    "ExpirationInMinutes": 360,
+    "RefreshTokenExpirationInDays": 30
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore": "Information"
+    }
+  }
+}

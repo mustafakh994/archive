@@ -1,0 +1,415 @@
+using Microsoft.EntityFrameworkCore;
+using AutoMapper;
+using FormsManagementApi.Data;
+using FormsManagementApi.DTOs;
+using FormsManagementApi.Models;
+
+namespace FormsManagementApi.Services;
+
+public class UserService : IUserService
+{
+    private readonly ApplicationDbContext _context;
+    private readonly IMapper _mapper;
+
+    public UserService(ApplicationDbContext context, IMapper mapper)
+    {
+        _context = context;
+        _mapper = mapper;
+    }
+
+    public async Task<ApiResponse<PagedResult<UserDto>>> GetUsersAsync(PaginationDto pagination, Guid? departmentId = null)
+    {
+        try
+        {
+            var query = _context.Users
+                .Include(u => u.Department)
+                .Include(u => u.Role)
+                .Include(u => u.UserPermissions)
+                .ThenInclude(up => up.Permission)
+                .AsQueryable();
+
+            // Filter by department if specified
+            if (departmentId.HasValue)
+            {
+                query = query.Where(u => u.DepartmentId == departmentId.Value);
+            }
+
+            if (!string.IsNullOrEmpty(pagination.Search))
+            {
+                query = query.Where(u => (u.Name != null && u.Name.Contains(pagination.Search)) || 
+                                       u.Email.Contains(pagination.Search));
+            }
+
+            // Apply sorting
+            if (!string.IsNullOrEmpty(pagination.SortBy))
+            {
+                switch (pagination.SortBy.ToLower())
+                {
+                    case "name":
+                        query = pagination.SortDescending ? query.OrderByDescending(u => u.Name) : query.OrderBy(u => u.Name);
+                        break;
+                    case "email":
+                        query = pagination.SortDescending ? query.OrderByDescending(u => u.Email) : query.OrderBy(u => u.Email);
+                        break;
+                    case "createdat":
+                        query = pagination.SortDescending ? query.OrderByDescending(u => u.CreatedAt) : query.OrderBy(u => u.CreatedAt);
+                        break;
+                    case "isactive":
+                        query = pagination.SortDescending ? query.OrderByDescending(u => u.IsActive) : query.OrderBy(u => u.IsActive);
+                        break;
+                    default:
+                        query = query.OrderByDescending(u => u.CreatedAt);
+                        break;
+                }
+            }
+            else
+            {
+                query = query.OrderByDescending(u => u.CreatedAt);
+            }
+
+            var totalItems = await query.CountAsync();
+            var items = await query
+                .Skip((pagination.Page - 1) * pagination.PageSize)
+                .Take(pagination.PageSize)
+                .ToListAsync();
+
+            var userDtos = _mapper.Map<List<UserDto>>(items);
+            var pagedResult = new PagedResult<UserDto>(userDtos, totalItems, pagination.Page, pagination.PageSize);
+
+            return ApiResponse<PagedResult<UserDto>>.SuccessResponse(pagedResult, "Users retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<PagedResult<UserDto>>.ErrorResponse($"An error occurred while retrieving users: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<UserDto>> GetUserByIdAsync(Guid id)
+    {
+        try
+        {
+            var user = await _context.Users
+                .Include(u => u.Department)
+                .Include(u => u.Role)
+                .Include(u => u.UserPermissions)
+                .ThenInclude(up => up.Permission)
+                .FirstOrDefaultAsync(u => u.Id == id);
+
+            if (user == null)
+            {
+                return ApiResponse<UserDto>.ErrorResponse("User not found.");
+            }
+
+            var userDto = _mapper.Map<UserDto>(user);
+            return ApiResponse<UserDto>.SuccessResponse(userDto, "User retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<UserDto>.ErrorResponse($"An error occurred while retrieving user: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<UserDto>> CreateUserAsync(CreateUserDto createUserDto)
+    {
+        try
+        {
+            // Check if user already exists
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == createUserDto.Email);
+            if (existingUser != null)
+            {
+                return ApiResponse<UserDto>.ErrorResponse("User with this email already exists.");
+            }
+
+            // Validate department if specified
+            if (createUserDto.DepartmentId.HasValue)
+            {
+                var department = await _context.Departments.FindAsync(createUserDto.DepartmentId.Value);
+                if (department == null)
+                {
+                    return ApiResponse<UserDto>.ErrorResponse("Invalid department.");
+                }
+            }
+
+            // Determine role - prioritize RoleId if provided, otherwise use Role name
+            Guid? roleId = null;
+            if (createUserDto.RoleId.HasValue)
+            {
+                // Validate that the role exists
+                var roleExists = await _context.Roles.AnyAsync(r => r.Id == createUserDto.RoleId.Value);
+                if (!roleExists)
+                {
+                    return ApiResponse<UserDto>.ErrorResponse("Invalid role ID.");
+                }
+                roleId = createUserDto.RoleId.Value;
+            }
+            else if (!string.IsNullOrEmpty(createUserDto.Role))
+            {
+                var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == createUserDto.Role);
+                if (role != null)
+                {
+                    roleId = role.Id;
+                }
+            }
+
+            var user = new User
+            {
+                Name = createUserDto.Name,
+                Email = createUserDto.Email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
+                RoleId = roleId,
+                DepartmentId = createUserDto.DepartmentId ?? Guid.Empty,
+                IsActive = createUserDto.IsActive,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            // Reload user with related data
+            user = await _context.Users
+                .Include(u => u.Department)
+                .Include(u => u.Role)
+                .Include(u => u.UserPermissions)
+                .ThenInclude(up => up.Permission)
+                .FirstAsync(u => u.Id == user.Id);
+
+            var userDto = _mapper.Map<UserDto>(user);
+            return ApiResponse<UserDto>.SuccessResponse(userDto, "User created successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<UserDto>.ErrorResponse($"An error occurred while creating user: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<UserDto>> UpdateUserAsync(Guid id, UpdateUserDto updateUserDto)
+    {
+        try
+        {
+            var user = await _context.Users
+                .Include(u => u.UserPermissions)
+                .FirstOrDefaultAsync(u => u.Id == id);
+
+            if (user == null)
+            {
+                return ApiResponse<UserDto>.ErrorResponse("User not found.");
+            }
+
+            // Check if new email conflicts with existing user (only if email is being updated)
+            if (!string.IsNullOrEmpty(updateUserDto.Email))
+            {
+                var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == updateUserDto.Email && u.Id != id);
+                if (existingUser != null)
+                {
+                    return ApiResponse<UserDto>.ErrorResponse("User with this email already exists.");
+                }
+            }
+
+            // Validate department if specified
+            if (updateUserDto.DepartmentId.HasValue)
+            {
+                var department = await _context.Departments.FindAsync(updateUserDto.DepartmentId.Value);
+                if (department == null)
+                {
+                    return ApiResponse<UserDto>.ErrorResponse("Invalid department.");
+                }
+            }
+
+            // Update role - prioritize RoleId if provided, otherwise use Role name
+            if (updateUserDto.RoleId.HasValue)
+            {
+                // Validate that the role exists
+                var roleExists = await _context.Roles.AnyAsync(r => r.Id == updateUserDto.RoleId.Value);
+                if (!roleExists)
+                {
+                    return ApiResponse<UserDto>.ErrorResponse("Invalid role ID.");
+                }
+                user.RoleId = updateUserDto.RoleId.Value;
+            }
+            else if (!string.IsNullOrEmpty(updateUserDto.Role))
+            {
+                var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == updateUserDto.Role);
+                user.RoleId = role?.Id;
+            }
+
+            // Update user properties (only update if provided)
+            if (!string.IsNullOrEmpty(updateUserDto.Name))
+                user.Name = updateUserDto.Name;
+            
+            if (!string.IsNullOrEmpty(updateUserDto.Email))
+                user.Email = updateUserDto.Email;
+            
+            if (updateUserDto.DepartmentId.HasValue)
+                user.DepartmentId = updateUserDto.DepartmentId.Value;
+            
+            if (updateUserDto.IsActive.HasValue)
+                user.IsActive = updateUserDto.IsActive.Value;
+            
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Reload user with updated data
+            user = await _context.Users
+                .Include(u => u.Department)
+                .Include(u => u.Role)
+                .Include(u => u.UserPermissions)
+                .ThenInclude(up => up.Permission)
+                .FirstAsync(u => u.Id == id);
+
+            var userDto = _mapper.Map<UserDto>(user);
+            return ApiResponse<UserDto>.SuccessResponse(userDto, "User updated successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<UserDto>.ErrorResponse($"An error occurred while updating user: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<bool>> DeleteUserAsync(Guid id)
+    {
+        try
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+            {
+                return ApiResponse<bool>.ErrorResponse("User not found.");
+            }
+
+            // Note: Form submissions are orphaned (kept in database) when user is deleted
+            // The foreign key relationship allows SET NULL or CASCADE is not configured
+            // Submissions remain accessible but user reference is removed
+            
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(true, "User deleted successfully. Associated submissions have been preserved.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<bool>.ErrorResponse($"An error occurred while deleting user: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<bool>> ToggleUserStatusAsync(Guid id)
+    {
+        try
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+            {
+                return ApiResponse<bool>.ErrorResponse("User not found.");
+            }
+
+            user.IsActive = !user.IsActive;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            var status = user.IsActive ? "activated" : "deactivated";
+            return ApiResponse<bool>.SuccessResponse(true, $"User {status} successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<bool>.ErrorResponse($"An error occurred while toggling user status: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<List<UserPermissionDto>>> GetUserPermissionsAsync(Guid userId)
+    {
+        try
+        {
+            var permissions = await _context.UserPermissions
+                .Include(up => up.Permission)
+                .Where(up => up.UserId == userId)
+                .OrderBy(up => up.Permission.Name)
+                .ToListAsync();
+
+            var permissionDtos = _mapper.Map<List<UserPermissionDto>>(permissions);
+            return ApiResponse<List<UserPermissionDto>>.SuccessResponse(permissionDtos, "User permissions retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<List<UserPermissionDto>>.ErrorResponse($"An error occurred while retrieving user permissions: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<UserPermissionDto>> AddUserPermissionAsync(Guid userId, string permission)
+    {
+        try
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return ApiResponse<UserPermissionDto>.ErrorResponse("User not found.");
+            }
+
+            // Find the permission by name
+            var permissionEntity = await _context.Permissions.FirstOrDefaultAsync(p => p.Name == permission);
+            if (permissionEntity == null)
+            {
+                return ApiResponse<UserPermissionDto>.ErrorResponse("Permission not found.");
+            }
+
+            // Check if permission already exists
+            var existingPermission = await _context.UserPermissions
+                .FirstOrDefaultAsync(up => up.UserId == userId && up.PermissionId == permissionEntity.Id);
+            if (existingPermission != null)
+            {
+                return ApiResponse<UserPermissionDto>.ErrorResponse("User already has this permission.");
+            }
+
+            var userPermission = new UserPermission
+            {
+                UserId = userId,
+                PermissionId = permissionEntity.Id,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.UserPermissions.Add(userPermission);
+            await _context.SaveChangesAsync();
+
+            // Reload with permission data
+            userPermission = await _context.UserPermissions
+                .Include(up => up.Permission)
+                .FirstAsync(up => up.UserId == userId && up.PermissionId == permissionEntity.Id);
+
+            var permissionDto = _mapper.Map<UserPermissionDto>(userPermission);
+            return ApiResponse<UserPermissionDto>.SuccessResponse(permissionDto, "Permission added successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<UserPermissionDto>.ErrorResponse($"An error occurred while adding user permission: {ex.Message}");
+        }
+    }
+
+    public async Task<ApiResponse<bool>> RemoveUserPermissionAsync(Guid userId, string permission)
+    {
+        try
+        {
+            // Find the permission by name
+            var permissionEntity = await _context.Permissions.FirstOrDefaultAsync(p => p.Name == permission);
+            if (permissionEntity == null)
+            {
+                return ApiResponse<bool>.ErrorResponse("Permission not found.");
+            }
+
+            var userPermission = await _context.UserPermissions
+                .FirstOrDefaultAsync(up => up.UserId == userId && up.PermissionId == permissionEntity.Id);
+
+            if (userPermission == null)
+            {
+                return ApiResponse<bool>.ErrorResponse("Permission not found for this user.");
+            }
+
+            _context.UserPermissions.Remove(userPermission);
+            await _context.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(true, "Permission removed successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<bool>.ErrorResponse($"An error occurred while removing user permission: {ex.Message}");
+        }
+    }
+}

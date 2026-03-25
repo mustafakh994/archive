@@ -1,0 +1,256 @@
+// This is your Prisma schema file.
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    String @id @default(cuid())
+  email String @unique
+  name  String?
+  password String // Added for authentication
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  memberships OrganizationMember[]
+  ownedOrganizations Organization[] @relation("OrganizationOwner")
+  
+  // New relations for enhanced permission system
+  formPermissions FormPermission[]
+  createdSchemaVersions FormSchemaVersion[] @relation("SchemaVersionCreator")
+  roleAssignments UserRoleAssignment[]
+  userPermissions UserPermission[]
+}
+
+model Organization {
+  id    String @id @default(cuid())
+  name  String
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  ownerId String
+  owner   User   @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  
+  members OrganizationMember[]
+  forms   Form[]
+}
+
+model OrganizationMember {
+  id        String   @id @default(cuid())
+  role      String   // e.g., 'ADMIN', 'EDITOR', 'VIEWER'
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  @@unique([userId, organizationId])
+}
+
+model Form {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  isPublished Boolean  @default(false)
+  shareUrl    String?  @unique
+
+  // The content field stores the entire form structure as JSON
+  content     Json
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  // Responses to this form
+  responses FormResponse[]
+  
+  // New relations for enhanced features
+  formPermissions FormPermission[]
+  schemaVersions FormSchemaVersion[]
+}
+
+model FormResponse {
+  id        String   @id @default(cuid())
+  formId    String
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  // Store response data as JSON
+  data Json
+  
+  // Track submitter IP for guest submissions
+  submitterIp String?
+  
+  @@index([formId])
+  @@index([submitterIp])
+}
+
+// New models for enhanced permission and management system
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  displayName String
+  description String?
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  roles            Role[]
+  permissions      Permission[]
+  roleAssignments  UserRoleAssignment[]
+  
+  @@unique([name])
+}
+
+model Role {
+  id           String   @id @default(cuid())
+  departmentId String
+  name         String
+  displayName  String
+  description  String?
+  isSystemRole Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  department      Department           @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  permissions     RolePermission[]
+  roleAssignments UserRoleAssignment[]
+  
+  @@unique([departmentId, name])
+  @@index([departmentId])
+}
+
+model Permission {
+  id           String   @id @default(cuid())
+  departmentId String
+  name         String
+  displayName  String
+  description  String?
+  resource     String
+  action       String
+  isActive     Boolean  @default(true)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  department      Department       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+  
+  @@unique([departmentId, name])
+  @@unique([departmentId, resource, action])
+  @@index([departmentId])
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+  
+  createdAt    DateTime @default(now())
+  
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model FormPermission {
+  id         Int      @id @default(autoincrement())
+  formId     String
+  userId     String
+  permission String   // 'view', 'edit', 'manage', 'submit'
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relations
+  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([formId, userId, permission])
+  @@index([formId])
+  @@index([userId])
+}
+
+model FormSchemaVersion {
+  id            String   @id @default(cuid())
+  formId        String
+  versionNumber Int
+  schemaData    Json
+  createdBy     String
+  
+  createdAt     DateTime @default(now())
+  
+  // Relations
+  form    Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+  creator User @relation("SchemaVersionCreator", fields: [createdBy], references: [id])
+  
+  @@unique([formId, versionNumber])
+  @@index([formId])
+  @@index([createdBy])
+}
+
+model UserRoleAssignment {
+  id           String   @id @default(cuid())
+  userId       String
+  departmentId String
+  roleId       String
+  isActive     Boolean  @default(true)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, departmentId, roleId])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([roleId])
+}
+
+model UserPermission {
+  id           String   @id @default(cuid())
+  userId       String
+  permissionId String
+  granted      Boolean  @default(true)
+  
+  createdAt    DateTime @default(now())
+  
+  // Relations
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+} 

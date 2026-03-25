@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/* RTL Support */
+.rtl {
+  direction: rtl;
+  text-align: right;
+}
+
+.rtl * {
+  direction: inherit;
+}
+
+/* Arabic Font Support */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@200;300;400;500;600;700;800;900&display=swap');
+
+.rtl {
+  font-family: 'Cairo', 'Inter', sans-serif;
+}
+
+/* RTL-specific utility classes */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .rtl-text-left {
+    text-align: left;
+  }
+  
+  .rtl-text-right {
+    text-align: right;
+  }
+  
+  .rtl-text-center {
+    text-align: center;
+  }
+  
+  .rtl-flex-row-reverse {
+    flex-direction: row-reverse;
+  }
+  
+  .rtl-space-x-reverse > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 1;
+  }
+} 
