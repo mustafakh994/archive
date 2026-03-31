@@ -212,8 +212,7 @@ using (var scope = app.Services.CreateScope())
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
-        context.Database.EnsureCreated();
-        // In production, use migrations instead: context.Database.Migrate();
+        await context.Database.MigrateAsync();
         
         // Update user passwords with proper hashes
         await UpdateUserPasswords(context, logger);

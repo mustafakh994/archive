@@ -3,6 +3,7 @@ using AutoMapper;
 using FormsManagementApi.Data;
 using FormsManagementApi.DTOs;
 using FormsManagementApi.Models;
+using Npgsql;
 
 namespace FormsManagementApi.Services;
 
@@ -24,8 +25,6 @@ public class UserService : IUserService
             var query = _context.Users
                 .Include(u => u.Department)
                 .Include(u => u.Role)
-                .Include(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
                 .AsQueryable();
 
             // Filter by department if specified
@@ -74,6 +73,7 @@ public class UserService : IUserService
                 .ToListAsync();
 
             var userDtos = _mapper.Map<List<UserDto>>(items);
+            await TryPopulateUserPermissionsAsync(items, userDtos);
             var pagedResult = new PagedResult<UserDto>(userDtos, totalItems, pagination.Page, pagination.PageSize);
 
             return ApiResponse<PagedResult<UserDto>>.SuccessResponse(pagedResult, "Users retrieved successfully.");
@@ -91,8 +91,6 @@ public class UserService : IUserService
             var user = await _context.Users
                 .Include(u => u.Department)
                 .Include(u => u.Role)
-                .Include(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
                 .FirstOrDefaultAsync(u => u.Id == id);
 
             if (user == null)
@@ -101,6 +99,7 @@ public class UserService : IUserService
             }
 
             var userDto = _mapper.Map<UserDto>(user);
+            await TryPopulateUserPermissionsAsync(new[] { user }, new[] { userDto });
             return ApiResponse<UserDto>.SuccessResponse(userDto, "User retrieved successfully.");
         }
         catch (Exception ex)
@@ -169,11 +168,10 @@ public class UserService : IUserService
             user = await _context.Users
                 .Include(u => u.Department)
                 .Include(u => u.Role)
-                .Include(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
                 .FirstAsync(u => u.Id == user.Id);
 
             var userDto = _mapper.Map<UserDto>(user);
+            await TryPopulateUserPermissionsAsync(new[] { user }, new[] { userDto });
             return ApiResponse<UserDto>.SuccessResponse(userDto, "User created successfully.");
         }
         catch (Exception ex)
@@ -253,11 +251,10 @@ public class UserService : IUserService
             user = await _context.Users
                 .Include(u => u.Department)
                 .Include(u => u.Role)
-                .Include(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
                 .FirstAsync(u => u.Id == id);
 
             var userDto = _mapper.Map<UserDto>(user);
+            await TryPopulateUserPermissionsAsync(new[] { user }, new[] { userDto });
             return ApiResponse<UserDto>.SuccessResponse(userDto, "User updated successfully.");
         }
         catch (Exception ex)
@@ -328,6 +325,10 @@ public class UserService : IUserService
             var permissionDtos = _mapper.Map<List<UserPermissionDto>>(permissions);
             return ApiResponse<List<UserPermissionDto>>.SuccessResponse(permissionDtos, "User permissions retrieved successfully.");
         }
+        catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
+        {
+            return ApiResponse<List<UserPermissionDto>>.SuccessResponse(new List<UserPermissionDto>(), "User permissions table is not available in this database yet.");
+        }
         catch (Exception ex)
         {
             return ApiResponse<List<UserPermissionDto>>.ErrorResponse($"An error occurred while retrieving user permissions: {ex.Message}");
@@ -377,6 +378,10 @@ public class UserService : IUserService
             var permissionDto = _mapper.Map<UserPermissionDto>(userPermission);
             return ApiResponse<UserPermissionDto>.SuccessResponse(permissionDto, "Permission added successfully.");
         }
+        catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
+        {
+            return ApiResponse<UserPermissionDto>.ErrorResponse("User-specific permissions are not available in this database yet.");
+        }
         catch (Exception ex)
         {
             return ApiResponse<UserPermissionDto>.ErrorResponse($"An error occurred while adding user permission: {ex.Message}");
@@ -407,9 +412,57 @@ public class UserService : IUserService
 
             return ApiResponse<bool>.SuccessResponse(true, "Permission removed successfully.");
         }
+        catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
+        {
+            return ApiResponse<bool>.ErrorResponse("User-specific permissions are not available in this database yet.");
+        }
         catch (Exception ex)
         {
             return ApiResponse<bool>.ErrorResponse($"An error occurred while removing user permission: {ex.Message}");
         }
+    }
+
+    private async Task TryPopulateUserPermissionsAsync(IEnumerable<User> users, IEnumerable<UserDto> userDtos)
+    {
+        var userIds = users.Select(u => u.Id).Distinct().ToList();
+        var dtoByUserId = userDtos.ToDictionary(u => u.Id);
+
+        foreach (var dto in dtoByUserId.Values)
+        {
+            dto.Permissions = new List<PermissionDto>();
+        }
+
+        if (userIds.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var userPermissions = await _context.UserPermissions
+                .Where(up => userIds.Contains(up.UserId))
+                .Include(up => up.Permission)
+                .AsNoTracking()
+                .ToListAsync();
+
+            foreach (var group in userPermissions.GroupBy(up => up.UserId))
+            {
+                if (dtoByUserId.TryGetValue(group.Key, out var dto))
+                {
+                    dto.Permissions = _mapper.Map<List<PermissionDto>>(group.Select(up => up.Permission).ToList());
+                }
+            }
+        }
+        catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
+        {
+            // Some deployments still use an older schema without the EF-managed UserPermissions table.
+            // In that case, user reads should still succeed and simply report no explicit per-user permissions.
+        }
+    }
+
+    private static bool IsUserPermissionStoreUnavailable(PostgresException ex)
+    {
+        return ex.SqlState == PostgresErrorCodes.UndefinedTable
+            || ex.SqlState == PostgresErrorCodes.UndefinedColumn;
     }
 }

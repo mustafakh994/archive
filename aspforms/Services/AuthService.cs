@@ -10,6 +10,7 @@ using FormsManagementApi.DTOs;
 using FormsManagementApi.Models;
 using Microsoft.Extensions.Options;
 using AutoMapper;
+using Npgsql;
 
 namespace FormsManagementApi.Services;
 
@@ -33,8 +34,6 @@ public class AuthService : IAuthService
             var user = await _context.Users
                 .Include(u => u.Department)
                 .Include(u => u.Role)
-                .Include(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
                 .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
@@ -64,7 +63,7 @@ public class AuthService : IAuthService
             await _context.SaveChangesAsync();
 
             var userDto = _mapper.Map<UserDto>(user);
-            userDto.Permissions = _mapper.Map<List<PermissionDto>>(user.UserPermissions.Select(p => p.Permission).ToList());
+            userDto.Permissions = await LoadUserPermissionsAsync(user.Id);
 
             var response = new LoginResponseDto
             {
@@ -171,9 +170,6 @@ public class AuthService : IAuthService
                 .ThenInclude(u => u.Department)
                 .Include(rt => rt.User)
                 .ThenInclude(u => u.Role)
-                .Include(rt => rt.User)
-                .ThenInclude(u => u.UserPermissions)
-                .ThenInclude(up => up.Permission)
                 .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
 
             if (storedRefreshToken == null)
@@ -213,7 +209,7 @@ public class AuthService : IAuthService
             await _context.SaveChangesAsync();
 
             var userDto = _mapper.Map<UserDto>(user);
-            userDto.Permissions = _mapper.Map<List<PermissionDto>>(user.UserPermissions.Select(p => p.Permission).ToList());
+            userDto.Permissions = await LoadUserPermissionsAsync(user.Id);
 
             var response = new LoginResponseDto
             {
@@ -271,6 +267,26 @@ public class AuthService : IAuthService
         if (string.Equals(roleName, "DepartmentAdmin", StringComparison.OrdinalIgnoreCase))
             return "DepartmentAdmin";
         return roleName;
+    }
+
+    private async Task<List<PermissionDto>> LoadUserPermissionsAsync(Guid userId)
+    {
+        try
+        {
+            var permissions = await _context.UserPermissions
+                .Where(up => up.UserId == userId)
+                .Include(up => up.Permission)
+                .Select(up => up.Permission)
+                .ToListAsync();
+
+            return _mapper.Map<List<PermissionDto>>(permissions);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
+        {
+            // Allow login to succeed on databases that have not been updated with the
+            // per-user permissions table yet. Users simply get no explicit overrides.
+            return new List<PermissionDto>();
+        }
     }
 
     public string GenerateRefreshToken()
