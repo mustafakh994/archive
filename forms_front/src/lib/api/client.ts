@@ -137,6 +137,20 @@ export interface Permission {
   createdAt: string
 }
 
+export interface Assignment {
+  id: string
+  userId: string
+  departmentId: string
+  roleId: string
+  isActive: boolean
+  createdAt: string
+  updatedAt?: string | null
+  userName?: string
+  userEmail?: string
+  departmentName?: string
+  roleName?: string
+}
+
 export interface Form {
   id: string
   title: string
@@ -224,6 +238,13 @@ export interface CreatePermissionData {
   description: string
   resource: string
   action: string
+}
+
+export interface CreateAssignmentData {
+  userId: string
+  departmentId: string
+  roleId: string
+  isActive?: boolean
 }
 
 export interface CreateFormData {
@@ -923,6 +944,36 @@ class ApiClient {
     return this.request(`/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    })
+  }
+
+  // Assignment endpoints
+  async getAssignmentsByUser(userId: string): Promise<ApiResponse<Assignment[]>> {
+    return this.request(`/assignment/user/${userId}`, {}, false, 0)
+  }
+
+  async createAssignment(data: CreateAssignmentData): Promise<ApiResponse<Assignment>> {
+    return this.request('/assignment', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async activateAssignment(id: string): Promise<ApiResponse<boolean>> {
+    return this.request(`/assignment/${id}/activate`, {
+      method: 'PATCH',
+    })
+  }
+
+  async deactivateAssignment(id: string): Promise<ApiResponse<boolean>> {
+    return this.request(`/assignment/${id}/deactivate`, {
+      method: 'PATCH',
+    })
+  }
+
+  async deleteAssignment(id: string): Promise<ApiResponse<boolean>> {
+    return this.request(`/assignment/${id}`, {
+      method: 'DELETE',
     })
   }
 

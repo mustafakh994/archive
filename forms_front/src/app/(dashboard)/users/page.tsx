@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PlusCircle, MoreHorizontal, Users, Edit, Eye, Trash2, UserCheck, UserX } from 'lucide-react'
+import { PlusCircle, MoreHorizontal, Users, Edit, Eye, Trash2, UserCheck, UserX, Briefcase } from 'lucide-react'
 import { useUserStore } from '@/lib/store/useUserStore'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import { useSuccessToast, useErrorToast } from '@/components/ui/Toast'
@@ -17,10 +17,11 @@ export default function UserManagementPage() {
     const successToast = useSuccessToast()
     const errorToast = useErrorToast()
     
-    // Check if current user has admin privileges
-    const isAdmin = ['SuperAdmin', 'DepartmentAdmin'].includes(currentUser?.role?.name || '')
-    const isSuperAdmin = currentUser?.role?.name === 'SuperAdmin'
-    const isDepartmentAdmin = currentUser?.role?.name === 'DepartmentAdmin'
+    // Accept role names regardless of casing/style coming from the API.
+    const normalizedRoleName = (currentUser?.role?.name || currentUser?.roleName || '').toLowerCase()
+    const isSuperAdmin = normalizedRoleName === 'superadmin'
+    const isDepartmentAdmin = normalizedRoleName === 'departmentadmin'
+    const isAdmin = isSuperAdmin || isDepartmentAdmin
 
     // Debug logs
     console.log('Current User:', currentUser)
@@ -32,13 +33,13 @@ export default function UserManagementPage() {
 
     useEffect(() => {
         if (currentUser) {
-            const userRole = currentUser.role?.name || currentUser.roleName
+            const userRole = (currentUser.role?.name || currentUser.roleName || '').toLowerCase()
             
-            if (userRole === 'SuperAdmin') {
+            if (userRole === 'superadmin') {
                 // SuperAdmin sees all users across all departments
                 console.log('User is SuperAdmin - fetching all users')
                 fetchUsers()
-            } else if (userRole === 'DepartmentAdmin') {
+            } else if (userRole === 'departmentadmin') {
                 // DepartmentAdmin sees only users in their department
                 console.log('User is DepartmentAdmin - fetching department users')
                 const departmentId = currentUser.departmentId
@@ -270,6 +271,17 @@ export default function UserManagementPage() {
                                                                     </>
                                                                 )}
                                                             </button>
+                                                        )}
+
+                                                        {isSuperAdmin && (
+                                                            <Link
+                                                                href={`/users/${user.id}/assignments`}
+                                                                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                                                onClick={() => setActionMenuOpen(null)}
+                                                            >
+                                                                <Briefcase size={16} />
+                                                                إدارة الإسنادات
+                                                            </Link>
                                                         )}
                                                         
                                                         {/* Only SuperAdmin can delete users */}

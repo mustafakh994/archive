@@ -23,8 +23,6 @@ public class RoleService : IRoleService
         {
             var query = _context.Roles
                 .Where(r => r.DepartmentId == departmentId)
-                .Include(r => r.RolePermissions)
-                .ThenInclude(rp => rp.Permission)
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(pagination.Search))

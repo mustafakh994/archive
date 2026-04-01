@@ -128,7 +128,6 @@ public class AssignmentService : IAssignmentService
                 .Include(a => a.User)
                 .Include(a => a.Department)
                 .Include(a => a.Role)
-                .Where(a => a.IsActive)
                 .OrderBy(a => a.CreatedAt)
                 .ToListAsync();
 
@@ -171,7 +170,7 @@ public class AssignmentService : IAssignmentService
                 .Include(a => a.User)
                 .Include(a => a.Department)
                 .Include(a => a.Role)
-                .Where(a => a.UserId == userId && a.IsActive)
+                .Where(a => a.UserId == userId)
                 .OrderBy(a => a.CreatedAt)
                 .ToListAsync();
 
@@ -214,7 +213,7 @@ public class AssignmentService : IAssignmentService
                 .Include(a => a.User)
                 .Include(a => a.Department)
                 .Include(a => a.Role)
-                .Where(a => a.DepartmentId == departmentId && a.IsActive)
+                .Where(a => a.DepartmentId == departmentId)
                 .OrderBy(a => a.CreatedAt)
                 .ToListAsync();
 
@@ -257,7 +256,7 @@ public class AssignmentService : IAssignmentService
                 .Include(a => a.User)
                 .Include(a => a.Department)
                 .Include(a => a.Role)
-                .Where(a => a.RoleId == roleId && a.IsActive)
+                .Where(a => a.RoleId == roleId)
                 .OrderBy(a => a.CreatedAt)
                 .ToListAsync();
 

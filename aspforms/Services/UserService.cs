@@ -164,6 +164,8 @@ public class UserService : IUserService
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            await TrySyncPrimaryRoleAssignmentAsync(user);
+
             // Reload user with related data
             user = await _context.Users
                 .Include(u => u.Department)
@@ -246,6 +248,7 @@ public class UserService : IUserService
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+            await TrySyncPrimaryRoleAssignmentAsync(user);
 
             // Reload user with updated data
             user = await _context.Users
@@ -461,6 +464,91 @@ public class UserService : IUserService
     }
 
     private static bool IsUserPermissionStoreUnavailable(PostgresException ex)
+    {
+        return ex.SqlState == PostgresErrorCodes.UndefinedTable
+            || ex.SqlState == PostgresErrorCodes.UndefinedColumn;
+    }
+
+    private async Task TrySyncPrimaryRoleAssignmentAsync(User user)
+    {
+        try
+        {
+            await SyncPrimaryRoleAssignmentAsync(user);
+            await _context.SaveChangesAsync();
+        }
+        catch (PostgresException ex) when (IsAssignmentStoreUnavailable(ex))
+        {
+            // Some deployments still use a schema without the Assignments table.
+            // In that case, preserve the legacy single-role behavior on the Users table.
+        }
+    }
+
+    private async Task SyncPrimaryRoleAssignmentAsync(User user)
+    {
+        var activeAssignments = await _context.Assignments
+            .Where(a => a.UserId == user.Id && a.IsActive)
+            .ToListAsync();
+
+        // The current user model exposes a single primary role/department,
+        // so keep only one active assignment aligned with those fields.
+        foreach (var assignment in activeAssignments)
+        {
+            var isCurrentAssignment = user.RoleId.HasValue
+                && user.DepartmentId.HasValue
+                && assignment.RoleId == user.RoleId.Value
+                && assignment.DepartmentId == user.DepartmentId.Value;
+
+            if (!isCurrentAssignment)
+            {
+                assignment.IsActive = false;
+                assignment.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+        }
+
+        if (!user.RoleId.HasValue || !user.DepartmentId.HasValue || user.DepartmentId == Guid.Empty)
+        {
+            return;
+        }
+
+        var currentAssignment = activeAssignments.FirstOrDefault(a =>
+            a.RoleId == user.RoleId.Value && a.DepartmentId == user.DepartmentId.Value);
+
+        if (currentAssignment != null)
+        {
+            if (!currentAssignment.IsActive)
+            {
+                currentAssignment.IsActive = true;
+                currentAssignment.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+
+            return;
+        }
+
+        var existingAssignment = await _context.Assignments
+            .FirstOrDefaultAsync(a =>
+                a.UserId == user.Id &&
+                a.RoleId == user.RoleId.Value &&
+                a.DepartmentId == user.DepartmentId.Value);
+
+        if (existingAssignment != null)
+        {
+            existingAssignment.IsActive = true;
+            existingAssignment.UpdatedAt = DateTimeOffset.UtcNow;
+            return;
+        }
+
+        _context.Assignments.Add(new Assignment
+        {
+            UserId = user.Id,
+            DepartmentId = user.DepartmentId.Value,
+            RoleId = user.RoleId.Value,
+            IsActive = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+    }
+
+    private static bool IsAssignmentStoreUnavailable(PostgresException ex)
     {
         return ex.SqlState == PostgresErrorCodes.UndefinedTable
             || ex.SqlState == PostgresErrorCodes.UndefinedColumn;
