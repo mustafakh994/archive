@@ -15,8 +15,7 @@ export default function NewUserPage() {
   const router = useRouter()
   const { createUser, isLoading, error, clearError } = useUserStore()
   const { departments, fetchDepartments } = useDepartmentStore()
-  const { roles, fetchRoles } = useRoleStore()
-  const { user: currentUser, hasPermission } = useAuthStore()
+  const { user: currentUser } = useAuthStore()
   
   const successToast = useSuccessToast()
   const errorToast = useErrorToast()
@@ -47,16 +46,12 @@ export default function NewUserPage() {
     setValidationErrors({})
   }, [formData, error, clearError])
 
-  // Check permissions - SuperAdmin and DepartmentAdmin can create users
+  // Check permissions - only SuperAdmin can create users
   useEffect(() => {
     const userRole = currentUser?.role?.name
-    const isDevelopment = process.env.NODE_ENV === 'development'
-    
-    // In development, allow any authenticated user to create users for testing
-    // In production, only SuperAdmin and DepartmentAdmin can create users
-    if (!isDevelopment && (!userRole || !['SuperAdmin', 'DepartmentAdmin'].includes(userRole))) {
+    if (!userRole || userRole !== 'SuperAdmin') {
       errorToast('غير مصرح', 'ليس لديك صلاحية لإنشاء مستخدمين جدد')
-      router.push('/users')
+      router.push('/dashboard')
     }
   }, [currentUser, errorToast, router])
 
@@ -162,12 +157,9 @@ export default function NewUserPage() {
         { id: ROLE_IDS.DEPARTMENT_ADMIN, name: 'DepartmentAdmin', displayName: 'مدير القسم' },
         { id: ROLE_IDS.SUPER_ADMIN, name: 'SuperAdmin', displayName: 'مدير النظام' }
       ]
-    } else {
-      // DepartmentAdmin can only assign DepartmentAdmin role
-      return [
-        { id: ROLE_IDS.DEPARTMENT_ADMIN, name: 'DepartmentAdmin', displayName: 'مدير القسم' }
-      ]
     }
+
+    return []
   }
 
   const availableRoles = getAvailableRoles()
@@ -179,13 +171,9 @@ export default function NewUserPage() {
     if (isSuperAdmin) {
       // SuperAdmin can see all departments
       return departments
-    } else {
-      // DepartmentAdmin can only see their own department
-      if (currentUser?.departmentId) {
-        return departments.filter(dept => dept.id === currentUser.departmentId)
-      }
-      return []
     }
+
+    return []
   }
 
   const availableDepartments = getAvailableDepartments()

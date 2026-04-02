@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PlusCircle, MoreHorizontal, Users, Edit, Eye, Trash2, UserCheck, UserX, Briefcase } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/lib/store/useUserStore'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import { useSuccessToast, useErrorToast } from '@/components/ui/Toast'
@@ -10,8 +11,9 @@ import { TableDate } from '@/components/ui/DateDisplay'
 
 
 export default function UserManagementPage() {
+    const router = useRouter()
     const { users, isLoading, error, fetchUsers, updateUser } = useUserStore()
-    const { user: currentUser, hasPermission } = useAuthStore()
+    const { user: currentUser } = useAuthStore()
     const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
     
     const successToast = useSuccessToast()
@@ -20,18 +22,22 @@ export default function UserManagementPage() {
     // Accept role names regardless of casing/style coming from the API.
     const normalizedRoleName = (currentUser?.role?.name || currentUser?.roleName || '').toLowerCase()
     const isSuperAdmin = normalizedRoleName === 'superadmin'
-    const isDepartmentAdmin = normalizedRoleName === 'departmentadmin'
-    const isAdmin = isSuperAdmin || isDepartmentAdmin
+    const isAuthorized = isSuperAdmin
 
     // Debug logs
     console.log('Current User:', currentUser)
     console.log('Current User Role:', currentUser?.role)
     console.log('Current User Role Name:', currentUser?.role?.name)
-    console.log('Is Admin:', isAdmin)
     console.log('Is Super Admin:', isSuperAdmin)
     console.log('Users in component:', users, 'Type:', typeof users, 'Is Array:', Array.isArray(users))
 
     useEffect(() => {
+        if (currentUser && !isAuthorized) {
+            errorToast('غير مصرح', 'إدارة المستخدمين متاحة لمدير النظام فقط')
+            router.push('/dashboard')
+            return
+        }
+
         if (currentUser) {
             const userRole = (currentUser.role?.name || currentUser.roleName || '').toLowerCase()
             
@@ -39,23 +45,9 @@ export default function UserManagementPage() {
                 // SuperAdmin sees all users across all departments
                 console.log('User is SuperAdmin - fetching all users')
                 fetchUsers()
-            } else if (userRole === 'departmentadmin') {
-                // DepartmentAdmin sees only users in their department
-                console.log('User is DepartmentAdmin - fetching department users')
-                const departmentId = currentUser.departmentId
-                if (departmentId) {
-                    fetchUsers({ departmentId })
-                } else {
-                    fetchUsers()
-                }
-            } else {
-                // Other roles - fetch all (might be restricted by backend)
-                fetchUsers()
             }
-        } else {
-            fetchUsers()
         }
-    }, [currentUser, fetchUsers])
+    }, [currentUser, errorToast, fetchUsers, isAuthorized, router])
 
     // Close action menu when clicking outside
     useEffect(() => {
@@ -159,7 +151,7 @@ export default function UserManagementPage() {
 
             <div className="flex items-center justify-between mb-8">
                 <h1 className="text-4xl font-bold text-gray-900" dir="rtl">إدارة المستخدمين</h1>
-                {(isAdmin || hasPermission('users.create') || isSuperAdmin || process.env.NODE_ENV === 'development') && (
+                {isAuthorized && (
                     <Link 
                         href="/users/new"
                         className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold"
@@ -242,7 +234,7 @@ export default function UserManagementPage() {
                                                         </Link>
                                                         
                                                         {/* SuperAdmin and DepartmentAdmin can edit users */}
-                                                        {isAdmin && (
+                                                        {isAuthorized && (
                                                             <Link
                                                                 href={`/users/${user.id}`}
                                                                 className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -254,7 +246,7 @@ export default function UserManagementPage() {
                                                         )}
                                                         
                                                         {/* SuperAdmin and DepartmentAdmin can toggle user status */}
-                                                        {isAdmin && (
+                                                        {isAuthorized && (
                                                             <button
                                                                 onClick={() => handleToggleUserStatus(user.id, user.isActive)}
                                                                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

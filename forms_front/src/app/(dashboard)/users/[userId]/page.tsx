@@ -31,8 +31,7 @@ export default function EditUserPage({ params }: EditUserPageProps) {
   } = useUserStore()
   
   const { departments, fetchDepartments } = useDepartmentStore()
-  const { roles, fetchRoles } = useRoleStore()
-  const { user: currentUser, hasPermission } = useAuthStore()
+  const { user: currentUser } = useAuthStore()
   
   const successToast = useSuccessToast()
   const errorToast = useErrorToast()
@@ -91,12 +90,12 @@ export default function EditUserPage({ params }: EditUserPageProps) {
     setValidationErrors({})
   }, [formData, error, clearError])
 
-  // Check permissions - SuperAdmin and DepartmentAdmin can update users
+  // Check permissions - only SuperAdmin can update users
   useEffect(() => {
     const userRole = currentUser?.role?.name
-    if (!userRole || !['SuperAdmin', 'DepartmentAdmin'].includes(userRole)) {
+    if (!userRole || userRole !== 'SuperAdmin') {
       errorToast('غير مصرح', 'ليس لديك صلاحية لتعديل المستخدمين')
-      router.push('/users')
+      router.push('/dashboard')
     }
   }, [currentUser, errorToast, router])
 
@@ -231,12 +230,9 @@ export default function EditUserPage({ params }: EditUserPageProps) {
         { id: ROLE_IDS.DEPARTMENT_ADMIN, name: 'DepartmentAdmin', displayName: 'مدير القسم' },
         { id: ROLE_IDS.SUPER_ADMIN, name: 'SuperAdmin', displayName: 'مدير النظام' }
       ]
-    } else {
-      // DepartmentAdmin can only assign DepartmentAdmin role
-      return [
-        { id: ROLE_IDS.DEPARTMENT_ADMIN, name: 'DepartmentAdmin', displayName: 'مدير القسم' }
-      ]
     }
+
+    return []
   }
 
   const availableRoles = getAvailableRoles()
@@ -248,13 +244,9 @@ export default function EditUserPage({ params }: EditUserPageProps) {
     if (isSuperAdmin) {
       // SuperAdmin can see all departments
       return departments
-    } else {
-      // DepartmentAdmin can only see their own department
-      if (currentUser?.departmentId) {
-        return departments.filter(dept => dept.id === currentUser.departmentId)
-      }
-      return []
     }
+
+    return []
   }
 
   const availableDepartments = getAvailableDepartments()

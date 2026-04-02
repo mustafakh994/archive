@@ -26,11 +26,11 @@ export default function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
         { label: 'إنشاء قالب جديد', href: '/forms/new', icon: PlusCircle },
         { label: 'جميع الوثائق المؤرشفة', href: '/submissions', icon: Inbox },
         { label: 'البحث المتقدم', href: '/responses', icon: FileSpreadsheet },
-        { label: 'إدارة المستخدمين', href: '/users', icon: Users },
     ]
 
     // SuperAdmin-only items
     const superAdminItems = [
+        { label: 'إدارة المستخدمين', href: '/users', icon: Users },
         { href: '/directorates', label: 'المديريات', icon: Building },
     ]
 

@@ -69,12 +69,12 @@ export async function GET(request: NextRequest) {
     const userRole = user.roleAssignments?.[0]?.role?.name
     const userDepartmentId = user.roleAssignments?.[0]?.department?.id
 
-    // Apply department-based filtering based on role
-    if (userRole === 'DepartmentAdmin' && userDepartmentId) {
-      // DepartmentAdmin can only see users from their department
-      departmentId = userDepartmentId
+    if (userRole !== 'SuperAdmin') {
+      return NextResponse.json(
+        { error: 'Only SuperAdmin can access user management' },
+        { status: 403 }
+      )
     }
-    // SuperAdmin can see all users or filter by departmentId if specified
 
     // Build query string
     const queryParams = new URLSearchParams()
@@ -158,27 +158,11 @@ export async function POST(request: NextRequest) {
 
     // Get user's role name and department
     const userRole = user.roleAssignments?.[0]?.role?.name
-    const userDepartmentId = user.roleAssignments?.[0]?.department?.id
-
-    // Apply department restrictions for DepartmentAdmin
-    if (userRole === 'DepartmentAdmin') {
-      if (!userDepartmentId) {
-        return NextResponse.json(
-          { error: 'Department information not found for user' },
-          { status: 403 }
-        )
-      }
-      
-      // DepartmentAdmin can only create users in their department
-      if (body.departmentId && body.departmentId !== userDepartmentId) {
-        return NextResponse.json(
-          { error: 'You can only create users in your own department' },
-          { status: 403 }
-        )
-      }
-
-      // Force the departmentId to the DepartmentAdmin's department
-      body.departmentId = userDepartmentId
+    if (userRole !== 'SuperAdmin') {
+      return NextResponse.json(
+        { error: 'Only SuperAdmin can manage users' },
+        { status: 403 }
+      )
     }
 
     // Forward request to backend API

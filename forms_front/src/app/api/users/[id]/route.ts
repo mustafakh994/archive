@@ -64,7 +64,12 @@ export async function GET(
     }
 
     const userRole = currentUser.roleAssignments?.[0]?.role?.name
-    const userDepartmentId = currentUser.roleAssignments?.[0]?.department?.id
+    if (userRole !== 'SuperAdmin') {
+      return NextResponse.json(
+        { error: 'Only SuperAdmin can access user management' },
+        { status: 403 }
+      )
+    }
 
     // Get the target user to check department
     const targetUser = await prisma.user.findUnique({
@@ -84,18 +89,6 @@ export async function GET(
         { error: 'Target user not found' },
         { status: 404 }
       )
-    }
-
-    // Check authorization: DepartmentAdmin can only view users in their department
-    if (userRole === 'DepartmentAdmin') {
-      const targetUserDepartmentId = targetUser.roleAssignments?.[0]?.department?.id
-      
-      if (targetUserDepartmentId !== userDepartmentId) {
-        return NextResponse.json(
-          { error: 'You can only view users in your own department' },
-          { status: 403 }
-        )
-      }
     }
 
     // Forward request to backend API
@@ -174,7 +167,12 @@ export async function PUT(
     }
 
     const userRole = currentUser.roleAssignments?.[0]?.role?.name
-    const userDepartmentId = currentUser.roleAssignments?.[0]?.department?.id
+    if (userRole !== 'SuperAdmin') {
+      return NextResponse.json(
+        { error: 'Only SuperAdmin can manage users' },
+        { status: 403 }
+      )
+    }
 
     // Get the target user to check department
     const targetUser = await prisma.user.findUnique({
@@ -193,26 +191,6 @@ export async function PUT(
         { error: 'Target user not found' },
         { status: 404 }
       )
-    }
-
-    // Check authorization: DepartmentAdmin can only update users in their department
-    if (userRole === 'DepartmentAdmin') {
-      const targetUserDepartmentId = targetUser.roleAssignments?.[0]?.department?.id
-      
-      if (targetUserDepartmentId !== userDepartmentId) {
-        return NextResponse.json(
-          { error: 'You can only update users in your own department' },
-          { status: 403 }
-        )
-      }
-
-      // DepartmentAdmin cannot change user to a different department
-      if (body.departmentId && body.departmentId !== userDepartmentId) {
-        return NextResponse.json(
-          { error: 'You cannot move users to a different department' },
-          { status: 403 }
-        )
-      }
     }
 
     // Forward request to backend API
@@ -259,6 +237,32 @@ export async function DELETE(
       return NextResponse.json(
         { error: 'Authorization token required' },
         { status: 401 }
+      )
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id: auth.userId },
+      include: {
+        roleAssignments: {
+          include: {
+            role: true
+          }
+        }
+      }
+    })
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
+
+    const userRole = currentUser.roleAssignments?.[0]?.role?.name
+    if (userRole !== 'SuperAdmin') {
+      return NextResponse.json(
+        { error: 'Only SuperAdmin can manage users' },
+        { status: 403 }
       )
     }
 
