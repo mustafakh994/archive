@@ -1108,7 +1108,43 @@ class ApiClient {
     if (params?.endDate) searchParams.append('endDate', params.endDate)
     
     const query = searchParams.toString()
-    return this.request(`/forms/${formId}/submissions${query ? `?${query}` : ''}`, {}, true, 60000) // Cache for 1 minute
+    const response = await this.request<
+      PaginatedResponse<FormSubmission> & { totalItems?: number; TotalItems?: number; Items?: FormSubmission[] }
+    >(`/forms/${formId}/submissions${query ? `?${query}` : ''}`, {}, true, 60000)
+
+    if (!response.success || !response.data) {
+      return response as ApiResponse<PaginatedResponse<FormSubmission>>
+    }
+
+    const raw = response.data
+    const items = raw.items ?? raw.Items ?? []
+    const totalCount =
+      typeof raw.totalCount === 'number'
+        ? raw.totalCount
+        : typeof raw.totalItems === 'number'
+          ? raw.totalItems
+          : typeof raw.TotalItems === 'number'
+            ? raw.TotalItems
+            : 0
+    const page = raw.page ?? 1
+    const pageSize = raw.pageSize ?? 10
+    const totalPages =
+      typeof raw.totalPages === 'number'
+        ? raw.totalPages
+        : pageSize > 0
+          ? Math.ceil(totalCount / pageSize)
+          : 0
+
+    return {
+      ...response,
+      data: {
+        items,
+        totalCount,
+        page,
+        pageSize,
+        totalPages,
+      },
+    }
   }
 
   async submitForm(formId: string, data: SubmitFormData): Promise<ApiResponse<{
