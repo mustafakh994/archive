@@ -85,16 +85,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing submissionId or file' }, { status: 400 })
   }
 
-  if (submissionId.includes('..') || submissionId.includes('/') || submissionId.includes('\\')) {
-    return NextResponse.json({ error: 'Invalid submissionId' }, { status: 400 })
-  }
-
   const basename = safeBasename(fileParam)
   if (!basename) {
     return NextResponse.json({ error: 'Invalid file' }, { status: 400 })
   }
 
-  const privateRoot = join(process.cwd(), 'data', 'uploads_private', submissionId)
+  // NOTE:
+  // الملفات محفوظة مباشرة داخل data/uploads_private بدون مجلد فرعي لكل submissionId.
+  // نحتفظ بـ submissionId في الـ query string فقط لأغراض منطقية/تتبّع، وليس كجزء من مسار الملفات.
+  const privateRoot = join(process.cwd(), 'data', 'uploads_private')
   const filePath = join(privateRoot, basename)
 
   if (!filePath.startsWith(privateRoot)) {

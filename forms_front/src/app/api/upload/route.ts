@@ -19,10 +19,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing submissionId or fieldId' }, { status: 400 })
     }
 
-    if (submissionId.includes('..') || submissionId.includes('/') || submissionId.includes('\\')) {
-      return NextResponse.json({ error: 'Invalid submissionId' }, { status: 400 })
-    }
-
     if (process.env.NODE_ENV === 'production' && !process.env.ATTACHMENT_ENCRYPTION_KEY_BASE64?.trim()) {
       return NextResponse.json(
         {
@@ -41,7 +37,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const uploadDir = join(process.cwd(), 'data', 'uploads_private', submissionId)
+    // NOTE:
+    // يتم تخزين الملفات مباشرة داخل data/uploads_private بدون مجلد فرعي لكل submissionId.
+    // يبقى submissionId مستخدمًا فقط كمعرّف منطقي في الرابط/الـ DB وليس كجزء من مسار النظام.
+    const uploadDir = join(process.cwd(), 'data', 'uploads_private')
     if (!existsSync(uploadDir)) {
       await mkdir(uploadDir, { recursive: true })
     }
