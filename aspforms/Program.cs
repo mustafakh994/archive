@@ -6,9 +6,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using FormsManagementApi.Configuration;
+using FormsManagementApi.Services;
 using FormsManagementApi.Data;
 using FormsManagementApi.Middleware;
-using FormsManagementApi.Services;
 using FormsManagementApi.Models;
 using FluentValidation.AspNetCore;
 using FluentValidation;
@@ -78,6 +78,8 @@ if (jwtSettings == null)
     throw new InvalidOperationException("JWT settings are not configured properly.");
 }
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSettings.SectionName));
+builder.Services.Configure<AttachmentEncryptionSettings>(builder.Configuration.GetSection(AttachmentEncryptionSettings.SectionName));
+builder.Services.AddSingleton<IAttachmentCrypto, AttachmentCryptoService>();
 
 // Configure Entity Framework
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");

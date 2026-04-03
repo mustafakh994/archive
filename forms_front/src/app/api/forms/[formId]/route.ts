@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
+import { getJwtVerificationSecret } from '@/lib/server-jwt-secret'
 
 const prisma = new PrismaClient()
 
@@ -13,9 +14,9 @@ function verifyToken(authHeader: string | null): { userId: string } | null {
     const token = authHeader.substring(7)
     
     try {
-        // For development, we'll use a simple token format
-        // In production, you should use proper JWT verification
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-jwt-secret-key-here') as any
+        const secret = getJwtVerificationSecret()
+        if (!secret) return null
+        const decoded = jwt.verify(token, secret) as any
         return { userId: decoded.userId || decoded.id || decoded.sub }
     } catch (error) {
         console.error('Token verification failed:', error)

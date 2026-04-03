@@ -252,6 +252,9 @@ namespace FormsManagementApi.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsEncrypted")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
                         .HasMaxLength(255)

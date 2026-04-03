@@ -41,6 +41,9 @@ public class FileAttachment
     public bool IsDeleted { get; set; } = false;
     
     public DateTimeOffset? DeletedAt { get; set; }
+
+    /// <summary>True when stored bytes are AES-256-GCM encrypted (see AttachmentCryptoService).</summary>
+    public bool IsEncrypted { get; set; }
     
     // Navigation properties
     [ForeignKey("UploadedBy")]

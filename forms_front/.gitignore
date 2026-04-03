@@ -204,6 +204,9 @@ storybook-static
 .vscode/
 *.code-workspace
 
+# Encrypted/private uploads (Next.js data/uploads_private)
+data/uploads_private/
+
 # OS generated files
 .DS_Store?
 ._*

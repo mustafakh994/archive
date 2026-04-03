@@ -3,6 +3,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { apiClient, User, LoginCredentials, RegisterData, ApiError, ApiErrorType } from '@/lib/api/client'
+import { syncAuthAccessCookie } from '@/lib/auth-cookie'
 
 export interface AuthResponse {
   token: string
@@ -96,6 +97,8 @@ export const useAuthStore = create<AuthState & AuthActions>()(
               error: null,
             })
 
+            syncAuthAccessCookie(token)
+
             // Start token expiration monitoring
             get().checkTokenExpiration()
 
@@ -188,6 +191,8 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           error: null,
           isTokenRefreshing: false,
         })
+
+        syncAuthAccessCookie(null)
       },
 
       refreshAuthToken: async () => {
@@ -228,6 +233,8 @@ export const useAuthStore = create<AuthState & AuthActions>()(
               isTokenRefreshing: false,
               error: null, // Clear any previous errors
             })
+
+            syncAuthAccessCookie(token)
 
             // Restart token expiration monitoring with a delay
             setTimeout(() => {
@@ -303,6 +310,8 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           expiresAt: expiresAt || null,
         })
 
+        syncAuthAccessCookie(token)
+
         // Restart token expiration monitoring if expiresAt is provided
         if (expiresAt) {
           get().checkTokenExpiration()
@@ -335,6 +344,8 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           isTokenRefreshing: false,
           error: 'Your session has expired. Please log in again.',
         })
+
+        syncAuthAccessCookie(null)
       },
 
       // Get current department context
@@ -404,6 +415,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {
+        syncAuthAccessCookie(state?.token ?? null)
         // Sync all auth data to API client when store is rehydrated
         if (state?.token) {
           apiClient.setToken(state.token)

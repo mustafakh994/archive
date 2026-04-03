@@ -11,16 +11,18 @@ public class FileService : IFileService
     private readonly ApplicationDbContext _context;
     private readonly IMapper _mapper;
     private readonly IConfiguration _configuration;
+    private readonly IAttachmentCrypto _attachmentCrypto;
     private readonly ILogger<FileService> _logger;
     private readonly string _uploadPath;
     private readonly long _maxFileSize;
     private readonly string[] _allowedExtensions;
 
-    public FileService(ApplicationDbContext context, IMapper mapper, IConfiguration configuration, ILogger<FileService> logger)
+    public FileService(ApplicationDbContext context, IMapper mapper, IConfiguration configuration, IAttachmentCrypto attachmentCrypto, ILogger<FileService> logger)
     {
         _context = context;
         _mapper = mapper;
         _configuration = configuration;
+        _attachmentCrypto = attachmentCrypto;
         _logger = logger;
         
         // Configure file upload settings
@@ -51,13 +53,19 @@ public class FileService : IFileService
             var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
             var filePath = Path.Combine(_uploadPath, uniqueFileName);
 
-            // Save file to disk
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            await using (var ms = new MemoryStream())
             {
-                await file.CopyToAsync(stream);
+                await file.CopyToAsync(ms);
+                var plainBytes = ms.ToArray();
+
+                var bytesToStore = _attachmentCrypto.IsEnabled
+                    ? _attachmentCrypto.Encrypt(plainBytes)
+                    : plainBytes;
+
+                await File.WriteAllBytesAsync(filePath, bytesToStore);
             }
 
-            // Save file info to database
+            // Save file info to database (FileSize = original plaintext length for clients)
             var fileAttachment = new FileAttachment
             {
                 OriginalFileName = file.FileName,
@@ -68,7 +76,8 @@ public class FileService : IFileService
                 Description = description,
                 UploadedBy = userId,
                 DepartmentId = departmentId,
-                UploadedAt = DateTimeOffset.UtcNow
+                UploadedAt = DateTimeOffset.UtcNow,
+                IsEncrypted = _attachmentCrypto.IsEnabled
             };
 
             _context.FileAttachments.Add(fileAttachment);
@@ -166,7 +175,25 @@ public class FileService : IFileService
                 return null;
             }
 
-            return await File.ReadAllBytesAsync(filePath);
+            var stored = await File.ReadAllBytesAsync(filePath);
+            if (!_attachmentCrypto.LooksLikeEncryptedPackage(stored))
+                return stored;
+
+            if (!_attachmentCrypto.IsEnabled)
+            {
+                _logger.LogError("Encrypted file at {FilePath} but AttachmentEncryption:KeyBase64 is not configured.", filePath);
+                return null;
+            }
+
+            try
+            {
+                return _attachmentCrypto.Decrypt(stored);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to decrypt file {FilePath}", filePath);
+                return null;
+            }
         }
         catch (Exception ex)
         {

@@ -14,6 +14,13 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { DetailDate, TableDate } from '@/components/ui/DateDisplay'
+import { useAuthStore } from '@/lib/store/useAuthStore'
+import {
+  isApiAttachmentDownloadUrl,
+  fetchAttachmentWithAuth,
+  triggerBrowserDownload,
+  openAttachmentInNewTabWithAuth,
+} from '@/lib/attachment-download-client'
 
 interface SubmissionViewerProps {
   submissionId?: string
@@ -28,6 +35,7 @@ export default function SubmissionViewer({
   onClose,
   showExportOptions = true 
 }: SubmissionViewerProps) {
+  const { token } = useAuthStore()
   const {
     currentSubmission,
     isLoading,
@@ -103,6 +111,42 @@ export default function SubmissionViewer({
   }
 
   const renderFilePreview = (url: string, fieldLabel: string): React.ReactNode => {
+    if (isApiAttachmentDownloadUrl(url)) {
+      return (
+        <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+          <p className="text-sm text-gray-600" dir="rtl">
+            مرفق محمي — يتطلب المصادقة للمعاينة أو التحميل.
+          </p>
+          <div className="flex gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => {
+                void openAttachmentInNewTabWithAuth(url, token).catch((e) =>
+                  alert(e instanceof Error ? e.message : 'فشل الفتح')
+                )
+              }}
+              className="inline-flex items-center px-3 py-1.5 text-sm text-purple-600 border border-purple-300 rounded-md hover:bg-purple-50"
+            >
+              <ExternalLink className="h-3 w-3 mr-1" />
+              Open
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void fetchAttachmentWithAuth(url, token)
+                  .then(({ blob, filename }) => triggerBrowserDownload(blob, filename))
+                  .catch((e) => alert(e instanceof Error ? e.message : 'فشل التحميل'))
+              }}
+              className="inline-flex items-center px-3 py-1.5 text-sm text-purple-600 border border-purple-300 rounded-md hover:bg-purple-50"
+            >
+              <Download className="h-3 w-3 mr-1" />
+              Download
+            </button>
+          </div>
+        </div>
+      )
+    }
+
     const fileType = getFileType(url)
     
     // Debug logging
@@ -352,6 +396,7 @@ export default function SubmissionViewer({
         typeof item === 'string' && (
           item.startsWith('http') || // Cloudflare R2 URLs
           item.startsWith('/uploads/') ||
+          item.includes('/api/attachments/download') ||
           item.startsWith('/api/download/') ||
           item.startsWith('data:') ||
           item.includes('.pdf') ||
@@ -438,6 +483,7 @@ export default function SubmissionViewer({
       
       // Check if it's other file patterns
       const isFileUrl = value.startsWith('/uploads/') ||
+                       value.includes('/api/attachments/download') ||
                        value.startsWith('/api/download/') ||
                        value.includes('.pdf') ||
                        value.includes('.jpg') ||

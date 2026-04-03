@@ -1,6 +1,9 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3'
 import { cloudflareR2Config } from '@/config/cloudflare-r2'
 
+// For encryption at rest on R2 storage, enable server-side encryption (SSE) on the bucket in the
+// Cloudflare dashboard (Object Lifecycle / default encryption) or use SSE-C via PutObject params.
+
 // Initialize R2 client
 export const r2Client = new S3Client({
   region: 'auto',

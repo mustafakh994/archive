@@ -17,6 +17,12 @@ import {
   FileSpreadsheet
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/store/useAuthStore'
+import {
+  isApiAttachmentDownloadUrl,
+  fetchAttachmentWithAuth,
+  triggerBrowserDownload,
+  openAttachmentInNewTabWithAuth,
+} from '@/lib/attachment-download-client'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import ExcelExportWizard from '@/components/forms/ExcelExportWizard'
 
@@ -53,6 +59,20 @@ interface SubmissionsResponse {
   totalPages: number
   hasNextPage: boolean
   hasPreviousPage: boolean
+}
+
+function attachmentDisplayName(url: string): string {
+  try {
+    if (url.includes('/api/attachments/download')) {
+      const full = url.startsWith('http://') || url.startsWith('https://') ? url : `http://local${url.startsWith('/') ? url : `/${url}`}`
+      const f = new URL(full).searchParams.get('file')
+      if (f) return decodeURIComponent(f)
+    }
+  } catch {
+    /* ignore */
+  }
+  const noQuery = url.split('?')[0]
+  return noQuery.split('/').pop() || 'مرفق'
 }
 
 function AdvancedSearchContent() {
@@ -334,6 +354,34 @@ function AdvancedSearchContent() {
 
     // Handle file upload fields
     if (field.type === 'file_upload') {
+      if (typeof value === 'string' && isApiAttachmentDownloadUrl(value)) {
+        return (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                void openAttachmentInNewTabWithAuth(value, token).catch((e) =>
+                  alert(e instanceof Error ? e.message : 'فشل العرض')
+                )
+              }}
+              className="inline-flex items-center px-3 py-1.5 text-sm text-purple-600 border border-purple-300 rounded-md hover:bg-purple-50"
+            >
+              عرض المرفق
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void fetchAttachmentWithAuth(value, token)
+                  .then(({ blob, filename }) => triggerBrowserDownload(blob, filename))
+                  .catch((e) => alert(e instanceof Error ? e.message : 'فشل التحميل'))
+              }}
+              className="inline-flex items-center px-3 py-1.5 text-sm text-purple-600 border border-purple-300 rounded-md hover:bg-purple-50"
+            >
+              تحميل
+            </button>
+          </div>
+        )
+      }
       // Check if it's a URL (Cloudflare R2 or other)
       if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/uploads/'))) {
         const getFileExtension = (url: string): string => {
@@ -706,6 +754,7 @@ function AdvancedSearchContent() {
                         if (typeof value === 'string' && (
                           value.startsWith('http') ||
                           value.startsWith('/uploads/') ||
+                          value.includes('/api/attachments/download') ||
                           value.toLowerCase().includes('.pdf') ||
                           value.toLowerCase().includes('.jpg') ||
                           value.toLowerCase().includes('.png')
@@ -759,14 +808,30 @@ function AdvancedSearchContent() {
                               {attachments.length > 0 ? (
                                 attachments.slice(0, 3).map((att, idx) => {
                                   const isPdf = att.url.toLowerCase().includes('.pdf')
-                                  return (
+                                  const needsAuth = isApiAttachmentDownloadUrl(att.url)
+                                  const btnClass = `p-1.5 rounded-md transition-colors ${isPdf ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`
+                                  return needsAuth ? (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      title={`View ${att.key}`}
+                                      className={btnClass}
+                                      onClick={() => {
+                                        void openAttachmentInNewTabWithAuth(att.url, token).catch((e) =>
+                                          alert(e instanceof Error ? e.message : 'فشل العرض')
+                                        )
+                                      }}
+                                    >
+                                      {isPdf ? <FileText size={16} /> : <Eye size={16} />}
+                                    </button>
+                                  ) : (
                                     <a
                                       key={idx}
                                       href={att.url}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       title={`View ${att.key}`}
-                                      className={`p-1.5 rounded-md transition-colors ${isPdf ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                                      className={btnClass}
                                     >
                                       {isPdf ? <FileText size={16} /> : <Eye size={16} />}
                                     </a>
@@ -915,7 +980,8 @@ function AdvancedSearchContent() {
                           </h5>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {data['system_attachments'].map((url: string, idx: number) => {
-                              const fileName = url.split('/').pop() || `Attachment ${idx + 1}`
+                              const fileName = attachmentDisplayName(url)
+                              const needsAuth = isApiAttachmentDownloadUrl(url)
                               return (
                                 <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-lg border border-indigo-100 shadow-sm hover:shadow-md transition-shadow">
                                     <div className="flex items-center gap-2 overflow-hidden">
@@ -923,12 +989,43 @@ function AdvancedSearchContent() {
                                       <span className="text-sm text-gray-700 truncate font-medium">{fileName}</span>
                                     </div>
                                     <div className="flex gap-2 shrink-0">
-                                        <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="عرض">
-                                            <Eye size={18} />
-                                        </a>
-                                        <a href={url} download className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition-colors" title="تحميل">
-                                            <Download size={18} />
-                                        </a>
+                                        {needsAuth ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              title="عرض"
+                                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                              onClick={() => {
+                                                void openAttachmentInNewTabWithAuth(url, token).catch((e) =>
+                                                  alert(e instanceof Error ? e.message : 'فشل العرض')
+                                                )
+                                              }}
+                                            >
+                                              <Eye size={18} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              title="تحميل"
+                                              className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                                              onClick={() => {
+                                                void fetchAttachmentWithAuth(url, token)
+                                                  .then(({ blob, filename }) => triggerBrowserDownload(blob, filename))
+                                                  .catch((e) => alert(e instanceof Error ? e.message : 'فشل التحميل'))
+                                              }}
+                                            >
+                                              <Download size={18} />
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="عرض">
+                                                <Eye size={18} />
+                                            </a>
+                                            <a href={url} download className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition-colors" title="تحميل">
+                                                <Download size={18} />
+                                            </a>
+                                          </>
+                                        )}
                                     </div>
                                 </div>
                               )
