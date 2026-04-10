@@ -215,12 +215,12 @@ public class ApplicationDbContext : DbContext
         {
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
-            
+
             entity.HasOne(e => e.Form)
-                .WithMany()
+                .WithMany(f => f.Webhooks)
                 .HasForeignKey(e => e.FormId)
                 .OnDelete(DeleteBehavior.Cascade);
-                
+
             entity.HasOne(e => e.Creator)
                 .WithMany()
                 .HasForeignKey(e => e.CreatedBy)

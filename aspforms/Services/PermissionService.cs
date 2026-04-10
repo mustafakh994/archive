@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using FormsManagementApi.Data;
 using FormsManagementApi.DTOs;
 using FormsManagementApi.Models;
+using Npgsql;
+using System.Data;
 
 namespace FormsManagementApi.Services;
 
@@ -10,6 +12,7 @@ public class PermissionService : IPermissionService
 {
     private readonly ApplicationDbContext _context;
     private readonly IMapper _mapper;
+    private bool? _isUserPermissionStoreAvailable;
 
     public PermissionService(ApplicationDbContext context, IMapper mapper)
     {
@@ -160,7 +163,11 @@ public class PermissionService : IPermissionService
             }
 
             // Check if permission is in use by any user permissions
-            var hasUserPermissions = await _context.UserPermissions.AnyAsync(up => up.PermissionId == id);
+            var hasUserPermissions = false;
+            if (await IsUserPermissionStoreAvailableAsync())
+            {
+                hasUserPermissions = await _context.UserPermissions.AnyAsync(up => up.PermissionId == id);
+            }
             if (hasUserPermissions)
             {
                 return ApiResponse<bool>.ErrorResponse("Cannot delete permission that is assigned to users.");
@@ -171,10 +178,48 @@ public class PermissionService : IPermissionService
 
             return ApiResponse<bool>.SuccessResponse(true, "Permission deleted successfully.");
         }
+        catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
+        {
+            _isUserPermissionStoreAvailable = false;
+            return ApiResponse<bool>.ErrorResponse("User-specific permissions are not available in this database yet.");
+        }
         catch (Exception ex)
         {
             return ApiResponse<bool>.ErrorResponse($"Error deleting permission: {ex.Message}");
         }
+    }
+
+    private async Task<bool> IsUserPermissionStoreAvailableAsync()
+    {
+        if (_isUserPermissionStoreAvailable.HasValue)
+        {
+            return _isUserPermissionStoreAvailable.Value;
+        }
+
+        try
+        {
+            await using var command = _context.Database.GetDbConnection().CreateCommand();
+            if (command.Connection?.State != ConnectionState.Open)
+            {
+                await command.Connection!.OpenAsync();
+            }
+
+            command.CommandText = "SELECT to_regclass('public.\"UserPermissions\"') IS NOT NULL;";
+            var result = await command.ExecuteScalarAsync();
+            _isUserPermissionStoreAvailable = result is bool exists && exists;
+        }
+        catch
+        {
+            _isUserPermissionStoreAvailable = false;
+        }
+
+        return _isUserPermissionStoreAvailable.Value;
+    }
+
+    private static bool IsUserPermissionStoreUnavailable(PostgresException ex)
+    {
+        return ex.SqlState == PostgresErrorCodes.UndefinedTable
+            || ex.SqlState == PostgresErrorCodes.UndefinedColumn;
     }
 }
 

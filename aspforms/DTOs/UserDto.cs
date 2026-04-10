@@ -78,6 +78,10 @@ public class UpdateUserDto
     public object? CustomPermissions { get; set; }
     
     public bool? IsActive { get; set; }
+
+    [MinLength(6)]
+    [MaxLength(255)]
+    public string? Password { get; set; }
 }
 
 public class UserPermissionDto

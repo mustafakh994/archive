@@ -11,6 +11,7 @@ using FormsManagementApi.Models;
 using Microsoft.Extensions.Options;
 using AutoMapper;
 using Npgsql;
+using System.Data;
 
 namespace FormsManagementApi.Services;
 
@@ -19,6 +20,7 @@ public class AuthService : IAuthService
     private readonly ApplicationDbContext _context;
     private readonly JwtSettings _jwtSettings;
     private readonly IMapper _mapper;
+    private bool? _isUserPermissionStoreAvailable;
 
     public AuthService(ApplicationDbContext context, IOptions<JwtSettings> jwtSettings, IMapper mapper)
     {
@@ -271,6 +273,11 @@ public class AuthService : IAuthService
 
     private async Task<List<PermissionDto>> LoadUserPermissionsAsync(Guid userId)
     {
+        if (!await IsUserPermissionStoreAvailableAsync())
+        {
+            return new List<PermissionDto>();
+        }
+
         try
         {
             var permissions = await _context.UserPermissions
@@ -283,10 +290,38 @@ public class AuthService : IAuthService
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
         {
+            _isUserPermissionStoreAvailable = false;
             // Allow login to succeed on databases that have not been updated with the
             // per-user permissions table yet. Users simply get no explicit overrides.
             return new List<PermissionDto>();
         }
+    }
+
+    private async Task<bool> IsUserPermissionStoreAvailableAsync()
+    {
+        if (_isUserPermissionStoreAvailable.HasValue)
+        {
+            return _isUserPermissionStoreAvailable.Value;
+        }
+
+        try
+        {
+            await using var command = _context.Database.GetDbConnection().CreateCommand();
+            if (command.Connection?.State != ConnectionState.Open)
+            {
+                await command.Connection!.OpenAsync();
+            }
+
+            command.CommandText = "SELECT to_regclass('public.\"UserPermissions\"') IS NOT NULL;";
+            var result = await command.ExecuteScalarAsync();
+            _isUserPermissionStoreAvailable = result is bool exists && exists;
+        }
+        catch
+        {
+            _isUserPermissionStoreAvailable = false;
+        }
+
+        return _isUserPermissionStoreAvailable.Value;
     }
 
     public string GenerateRefreshToken()

@@ -280,8 +280,6 @@ public class FormService : IFormService
             // Store the original schema to compare for changes
             var originalSchema = form.FormSchema;
 
-            Console.WriteLine($"[DEBUG] Original form schema: {originalSchema}");
-
             // Validate JSON before mapping
             if (updateFormDto.FormSchema != null)
             {
@@ -311,12 +309,6 @@ public class FormService : IFormService
                 }
             }
 
-            // Check if schema has changed BEFORE updating the form
-            var newSchema = updateFormDto.FormSchema != null ? JsonSerializer.Serialize(updateFormDto.FormSchema) : form.FormSchema;
-            var schemaChanged = !string.IsNullOrEmpty(newSchema) && newSchema != originalSchema;
-            
-            Console.WriteLine($"[DEBUG] Schema changed: {schemaChanged}, Original: {originalSchema}, New: {newSchema}");
-
             _mapper.Map(updateFormDto, form);
 
             // Ensure Code is always filled after mapping
@@ -335,7 +327,12 @@ public class FormService : IFormService
             }
 
             form.UpdatedAt = DateTimeOffset.UtcNow;
-            
+
+            // Compare after map so we use the same serialized string that is persisted (matches FormSchemaVersions)
+            var schemaChanged = updateFormDto.FormSchema != null
+                && !string.IsNullOrWhiteSpace(form.FormSchema)
+                && !string.Equals(form.FormSchema, originalSchema, StringComparison.Ordinal);
+
             await _context.SaveChangesAsync();
 
             // Create new schema version if schema has changed
@@ -343,7 +340,7 @@ public class FormService : IFormService
             {
                 // Get the next version number
                 var nextVersion = await GetNextSchemaVersionAsync(form.Id);
-                await CreateSchemaVersionAsync(form.Id, newSchema ?? string.Empty, form.CreatedBy, nextVersion);
+                await CreateSchemaVersionAsync(form.Id, form.FormSchema ?? string.Empty, form.CreatedBy, nextVersion);
                 
                 // Update the form's version field to reflect the latest version
                 form.Version = nextVersion;

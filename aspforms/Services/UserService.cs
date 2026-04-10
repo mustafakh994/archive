@@ -4,6 +4,7 @@ using FormsManagementApi.Data;
 using FormsManagementApi.DTOs;
 using FormsManagementApi.Models;
 using Npgsql;
+using System.Data;
 
 namespace FormsManagementApi.Services;
 
@@ -11,6 +12,7 @@ public class UserService : IUserService
 {
     private readonly ApplicationDbContext _context;
     private readonly IMapper _mapper;
+    private bool? _isUserPermissionStoreAvailable;
 
     public UserService(ApplicationDbContext context, IMapper mapper)
     {
@@ -187,7 +189,6 @@ public class UserService : IUserService
         try
         {
             var user = await _context.Users
-                .Include(u => u.UserPermissions)
                 .FirstOrDefaultAsync(u => u.Id == id);
 
             if (user == null)
@@ -244,6 +245,10 @@ public class UserService : IUserService
             
             if (updateUserDto.IsActive.HasValue)
                 user.IsActive = updateUserDto.IsActive.Value;
+
+            // Optional admin reset password from user edit endpoint.
+            if (!string.IsNullOrWhiteSpace(updateUserDto.Password))
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(updateUserDto.Password);
             
             user.UpdatedAt = DateTime.UtcNow;
 
@@ -319,6 +324,11 @@ public class UserService : IUserService
     {
         try
         {
+            if (!await IsUserPermissionStoreAvailableAsync())
+            {
+                return ApiResponse<List<UserPermissionDto>>.SuccessResponse(new List<UserPermissionDto>(), "User permissions table is not available in this database yet.");
+            }
+
             var permissions = await _context.UserPermissions
                 .Include(up => up.Permission)
                 .Where(up => up.UserId == userId)
@@ -330,6 +340,7 @@ public class UserService : IUserService
         }
         catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
         {
+            _isUserPermissionStoreAvailable = false;
             return ApiResponse<List<UserPermissionDto>>.SuccessResponse(new List<UserPermissionDto>(), "User permissions table is not available in this database yet.");
         }
         catch (Exception ex)
@@ -342,6 +353,11 @@ public class UserService : IUserService
     {
         try
         {
+            if (!await IsUserPermissionStoreAvailableAsync())
+            {
+                return ApiResponse<UserPermissionDto>.ErrorResponse("User-specific permissions are not available in this database yet.");
+            }
+
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
             {
@@ -383,6 +399,7 @@ public class UserService : IUserService
         }
         catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
         {
+            _isUserPermissionStoreAvailable = false;
             return ApiResponse<UserPermissionDto>.ErrorResponse("User-specific permissions are not available in this database yet.");
         }
         catch (Exception ex)
@@ -395,6 +412,11 @@ public class UserService : IUserService
     {
         try
         {
+            if (!await IsUserPermissionStoreAvailableAsync())
+            {
+                return ApiResponse<bool>.ErrorResponse("User-specific permissions are not available in this database yet.");
+            }
+
             // Find the permission by name
             var permissionEntity = await _context.Permissions.FirstOrDefaultAsync(p => p.Name == permission);
             if (permissionEntity == null)
@@ -417,6 +439,7 @@ public class UserService : IUserService
         }
         catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
         {
+            _isUserPermissionStoreAvailable = false;
             return ApiResponse<bool>.ErrorResponse("User-specific permissions are not available in this database yet.");
         }
         catch (Exception ex)
@@ -440,6 +463,11 @@ public class UserService : IUserService
             return;
         }
 
+        if (!await IsUserPermissionStoreAvailableAsync())
+        {
+            return;
+        }
+
         try
         {
             var userPermissions = await _context.UserPermissions
@@ -458,9 +486,37 @@ public class UserService : IUserService
         }
         catch (PostgresException ex) when (IsUserPermissionStoreUnavailable(ex))
         {
+            _isUserPermissionStoreAvailable = false;
             // Some deployments still use an older schema without the EF-managed UserPermissions table.
             // In that case, user reads should still succeed and simply report no explicit per-user permissions.
         }
+    }
+
+    private async Task<bool> IsUserPermissionStoreAvailableAsync()
+    {
+        if (_isUserPermissionStoreAvailable.HasValue)
+        {
+            return _isUserPermissionStoreAvailable.Value;
+        }
+
+        try
+        {
+            await using var command = _context.Database.GetDbConnection().CreateCommand();
+            if (command.Connection?.State != ConnectionState.Open)
+            {
+                await command.Connection!.OpenAsync();
+            }
+
+            command.CommandText = "SELECT to_regclass('public.\"UserPermissions\"') IS NOT NULL;";
+            var result = await command.ExecuteScalarAsync();
+            _isUserPermissionStoreAvailable = result is bool exists && exists;
+        }
+        catch
+        {
+            _isUserPermissionStoreAvailable = false;
+        }
+
+        return _isUserPermissionStoreAvailable.Value;
     }
 
     private static bool IsUserPermissionStoreUnavailable(PostgresException ex)

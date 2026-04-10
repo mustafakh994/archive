@@ -173,73 +173,74 @@ export default function FormBuilderClient({ formId }: FormBuilderClientProps) {
         <SidebarToolbox />
 
         {/* Center Column - Builder Canvas */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col relative bg-slate-50">
           {/* Header with Better Layout */}
-          <div className="bg-white border-b border-gray-200 shadow-sm">
+          <div className="bg-white/80 backdrop-blur-xl border-b border-slate-200/80 shadow-sm z-10 sticky top-0">
             {/* Top Row - Title, Language, and Status */}
-            <div className="px-6 py-3 border-b border-gray-100" dir="rtl">
+            <div className="px-6 py-4 border-b border-slate-100" dir="rtl">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4 border-r-2 border-indigo-500 pr-3">
                   <div className="text-right">
-                    <h1 className="text-lg font-semibold text-gray-900">منشئ قوالب الوثائق</h1>
-                    <p className="text-xs text-gray-500 mt-0.5">أنشئ وخصص قالبك</p>
+                    <h1 className="text-xl font-black text-slate-900 tracking-tight">محرر التكوين المتقدم</h1>
+                    <p className="text-[13px] text-slate-500 font-medium mt-0.5">صمم قالبك الاحترافي بخطوات بسيطة</p>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 px-2.5 py-1.5 rounded-md">
-                    <Globe size={13} />
+                  <div className="flex items-center gap-1.5 text-[12px] font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full ring-1 ring-inset ring-slate-200/50">
+                    <Globe size={13} strokeWidth={2.5} />
                     <span>العربية</span>
                   </div>
                 </div>
 
                 {/* Status Dropdown */}
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-black">الحالة:</label>
+                <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
+                  <label className="text-sm font-bold text-slate-700">الحالة النظامية:</label>
                   <select
                     value={form.status || 'Draft'}
                     onChange={(e) => setFormStatus(e.target.value as 'Active' | 'Inactive' | 'Draft')}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                    className="pl-4 pr-8 py-1.5 text-sm font-bold border-none bg-transparent focus:ring-0 text-indigo-700 cursor-pointer"
                     dir="rtl"
                   >
-                    <option value="Draft">مسودة</option>
-                    <option value="Active">نشط</option>
-                    <option value="Inactive">غير نشط</option>
+                    <option className="text-slate-700 font-bold" value="Draft">مسودة 📝</option>
+                    <option className="text-slate-700 font-bold" value="Active">نشط وملزم 🟢</option>
+                    <option className="text-slate-700 font-bold" value="Inactive">غير نشط (معلق) 🔴</option>
                   </select>
                 </div>
               </div>
             </div>
 
             {/* Middle Row - LocalStorage Status */}
-            <div className="px-6 py-2.5 border-b border-gray-100 bg-gray-50" dir="rtl">
+            <div className="px-6 py-2 border-b border-slate-100 bg-slate-50/50 hidden md:block" dir="rtl">
               <div className="flex items-center justify-center">
                 <LocalStorageStatus />
               </div>
             </div>
 
             {/* Bottom Row - Action Buttons */}
-            <div className="px-6 py-3" dir="rtl">
+            <div className="px-6 py-3.5 bg-white/50" dir="rtl">
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={handleSave}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm hover:shadow-md"
-                  title="حفظ القالب"
+                  className="flex items-center justify-center gap-2.5 px-8 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-500 text-white rounded-xl hover:from-indigo-700 hover:to-blue-600 transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5"
+                  title="حفظ التكوين"
                 >
-                  <Save size={18} />
-                  <span className="text-sm font-medium">حفظ القالب</span>
+                  <Save size={18} strokeWidth={2.5} />
+                  <span className="text-[15px] font-bold">حفظ واعتماد الأساس</span>
                 </button>
+                <div className="w-px h-8 bg-slate-200 mx-1"></div>
                 <button
                   onClick={() => setShowPreviewModal(true)}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all shadow-sm hover:shadow-md"
-                  title="معاينة"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all font-bold shadow-sm"
+                  title="معاينة ديناميكية"
                 >
-                  <Eye size={18} />
-                  <span className="text-sm font-medium">معاينة</span>
+                  <Eye size={18} strokeWidth={2.5} />
+                  <span className="text-[14px]">معاينة كـ مستخدم</span>
                 </button>
                 <button
                   onClick={() => setShowCustomizeModal(true)}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all shadow-sm hover:shadow-md"
-                  title="تخصيص"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all font-bold shadow-sm"
+                  title="تخصيص المظهر"
                 >
-                  <Palette size={18} />
-                  <span className="text-sm font-medium">تخصيص</span>
+                  <Palette size={18} strokeWidth={2.5} />
+                  <span className="text-[14px]">إعدادات المظهر</span>
                 </button>
               </div>
             </div>

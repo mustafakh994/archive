@@ -18,7 +18,7 @@ export default function DashboardLayout({
 
     return (
         <AuthGuard requireAuth={true}>
-            <div className="min-h-screen bg-gray-50 flex">
+            <div className="min-h-screen bg-slate-50/80 flex">
                 <Sidebar isCollapsed={isSidebarCollapsed} />
                 <div className="flex-1 flex flex-col">
                     <Header onToggleSidebar={toggleSidebar} isSidebarCollapsed={isSidebarCollapsed} />

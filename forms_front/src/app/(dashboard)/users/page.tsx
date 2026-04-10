@@ -138,127 +138,142 @@ export default function UserManagementPage() {
     }
 
     return (
-        <div>
+        <div className="space-y-8 animate-in fade-in duration-500">
             {!Array.isArray(users) && (
-                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-yellow-800 text-lg font-medium" dir="rtl">
-                        ⚠️ API غير متاح. يتم عرض بيانات تجريبية.
-                    </p>
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-3 text-amber-800">
+                        <div className="bg-amber-100 p-2 rounded-lg">⚠️</div>
+                        <p className="text-lg font-bold" dir="rtl">API غير متاح. يتم عرض بيانات تجريبية.</p>
+                    </div>
                 </div>
             )}
             
-           
-
-            <div className="flex items-center justify-between mb-8">
-                <h1 className="text-4xl font-bold text-gray-900" dir="rtl">إدارة المستخدمين</h1>
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tight" dir="rtl">إدارة المستخدمين</h1>
+                    <p className="mt-2 text-[17px] text-slate-500 font-medium" dir="rtl">إضافة وتعديل صلاحيات النظام والمستخدمين المرتبطين.</p>
+                </div>
                 {isAuthorized && (
                     <Link 
                         href="/users/new"
-                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold"
+                        className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-white transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 w-full md:w-auto"
                         dir="rtl"
                     >
-                        <PlusCircle size={24} />
+                        <PlusCircle size={22} strokeWidth={2.5} />
                         <span>إضافة مستخدم جديد</span>
                     </Link>
                 )}
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-base text-right text-gray-500">
-                        <thead className="text-lg text-gray-700 uppercase bg-gray-50">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-visible transition-all hover:shadow-md">
+                <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-sm text-right text-slate-600">
+                        <thead className="bg-slate-50 text-[13px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
                             <tr>
-                                <th scope="col" className="px-6 py-4 font-semibold">الاسم</th>
-                                <th scope="col" className="px-6 py-4 font-semibold">البريد الإلكتروني</th>
-                                <th scope="col" className="px-6 py-4 font-semibold">المديرية</th>
-                                <th scope="col" className="px-6 py-4 font-semibold">الدور</th>
-                                <th scope="col" className="px-6 py-4 font-semibold">الحالة</th>
-                                <th scope="col" className="px-6 py-4 font-semibold">تاريخ الإنشاء</th>
-                                <th scope="col" className="px-6 py-4">
-                                    <span className="sr-only">الإجراءات</span>
-                                </th>
+                                <th scope="col" className="px-6 py-5">الاسم</th>
+                                <th scope="col" className="px-6 py-5">البريد الإلكتروني</th>
+                                <th scope="col" className="px-6 py-5">المديرية</th>
+                                <th scope="col" className="px-6 py-5">الدور</th>
+                                <th scope="col" className="px-6 py-5">الحالة</th>
+                                <th scope="col" className="px-6 py-5">تاريخ الإنشاء</th>
+                                <th scope="col" className="px-6 py-5 text-center">الإجراءات</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-slate-100">
                             {!displayUsers || displayUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                                        <Users className="w-16 h-16 text-gray-400 mx-auto mb-6" />
-                                        <p className="text-xl font-medium" dir="rtl">لا توجد مستخدمين بعد. ابدأ بإضافة مستخدم جديد.</p>
+                                    <td colSpan={7} className="px-6 py-16 text-center text-slate-500">
+                                        <div className="flex flex-col items-center justify-center gap-3">
+                                            <Users className="w-12 h-12 text-slate-300" strokeWidth={1.5} />
+                                            <p className="text-[17px] font-bold text-slate-600" dir="rtl">لا توجد مستخدمين بعد. ابدأ بإضافة مستخدم جديد.</p>
+                                        </div>
                                     </td>
                                 </tr>
                             ) : (
                                 displayUsers.map((user) => (
-                                    <tr key={user.id} className="bg-white border-b hover:bg-gray-50">
-                                        <th scope="row" className="px-6 py-6 font-semibold text-gray-900 whitespace-nowrap text-lg">
-                                            {user.name}
+                                    <tr key={user.id} className="hover:bg-indigo-50/30 transition-colors group">
+                                        <th scope="row" className="px-6 py-4.5 font-bold text-slate-900 whitespace-nowrap text-[15px]">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm ring-2 ring-white">
+                                                    {user.name.substring(0, 1).toUpperCase()}
+                                                </div>
+                                                {user.name}
+                                            </div>
                                         </th>
-                                        <td className="px-6 py-6 text-gray-600 text-base">{user.email}</td>
-                                        <td className="px-6 py-6 text-gray-600 text-base">
-                                            {user.department?.name || 'غير محدد'}
+                                        <td className="px-6 py-4.5 text-[14px] font-medium text-slate-500" dir="ltr text-right">{user.email}</td>
+                                        <td className="px-6 py-4.5 text-[14px] font-bold text-slate-700">
+                                            {user.department?.name ? (
+                                                <span className="inline-flex items-center gap-1.5 break-words">
+                                                    <Briefcase size={14} className="text-indigo-500" />
+                                                    {user.department.name}
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-400">غير محدد</span>
+                                            )}
                                         </td>
-                                        <td className="px-6 py-6 text-gray-600 text-base">
-                                            {user.role?.name || 'غير محدد'}
+                                        <td className="px-6 py-4.5">
+                                            <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-2.5 py-1 text-sm font-bold text-slate-700 border border-slate-200">
+                                                {user.role?.name || 'غير محدد'}
+                                            </span>
                                         </td>
-                                        <td className="px-6 py-6">
-                                            <span className={`px-3 py-2 rounded-full text-base font-semibold ${
-                                                user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        <td className="px-6 py-4.5">
+                                            <span className={`inline-flex px-3 py-1.5 rounded-full text-[13px] font-bold ring-1 ring-inset ${
+                                                user.isActive ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-rose-50 text-rose-700 ring-rose-600/20'
                                             }`}>
                                                 {user.isActive ? 'نشط' : 'غير نشط'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-6 text-base">
+                                        <td className="px-6 py-4.5 text-[14px] font-semibold text-slate-600">
                                             <TableDate date={user.createdAt} />
                                         </td>
-                                        <td className="px-6 py-6 text-center relative">
+                                        <td className="px-6 py-4.5 text-center relative">
                                             <button 
                                                 onClick={() => setActionMenuOpen(actionMenuOpen === user.id ? null : user.id)}
-                                                className="text-gray-500 hover:text-gray-700" 
+                                                className="p-2 text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors ring-1 ring-transparent hover:ring-indigo-100" 
                                                 aria-label="خيارات إضافية"
                                             >
-                                                <MoreHorizontal size={24} />
+                                                <MoreHorizontal size={20} strokeWidth={2.5} />
                                             </button>
                                             
                                             {/* Action Menu */}
                                             {actionMenuOpen === user.id && (
-                                                <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+                                                <div className="absolute left-6 top-full mt-1 w-48 bg-white rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 ring-1 ring-slate-200/20 z-50 overflow-hidden transform opacity-100 scale-100 origin-top-left transition-all">
                                                     <div className="py-1">
-                                                        {/* All authenticated users can view user details */}
                                                         <Link
                                                             href={`/users/${user.id}`}
-                                                            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                                            className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
                                                             onClick={() => setActionMenuOpen(null)}
                                                         >
-                                                            <Eye size={16} />
+                                                            <Eye size={16} strokeWidth={2.5} />
                                                             عرض التفاصيل
                                                         </Link>
                                                         
-                                                        {/* SuperAdmin and DepartmentAdmin can edit users */}
                                                         {isAuthorized && (
                                                             <Link
                                                                 href={`/users/${user.id}`}
-                                                                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                                                className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
                                                                 onClick={() => setActionMenuOpen(null)}
                                                             >
-                                                                <Edit size={16} />
+                                                                <Edit size={16} strokeWidth={2.5} />
                                                                 تعديل
                                                             </Link>
                                                         )}
                                                         
-                                                        {/* SuperAdmin and DepartmentAdmin can toggle user status */}
                                                         {isAuthorized && (
                                                             <button
                                                                 onClick={() => handleToggleUserStatus(user.id, user.isActive)}
-                                                                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                                                className={`flex items-center gap-2.5 w-full px-4 py-2.5 text-[14px] font-bold transition-colors ${
+                                                                    user.isActive ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'
+                                                                }`}
                                                             >
                                                                 {user.isActive ? (
                                                                     <>
-                                                                        <UserX size={16} />
+                                                                        <UserX size={16} strokeWidth={2.5} />
                                                                         إلغاء التفعيل
                                                                     </>
                                                                 ) : (
                                                                     <>
-                                                                        <UserCheck size={16} />
+                                                                        <UserCheck size={16} strokeWidth={2.5} />
                                                                         تفعيل
                                                                     </>
                                                                 )}
@@ -268,25 +283,23 @@ export default function UserManagementPage() {
                                                         {isSuperAdmin && (
                                                             <Link
                                                                 href={`/users/${user.id}/assignments`}
-                                                                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                                                className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors border-t border-slate-100 mt-1 pt-2"
                                                                 onClick={() => setActionMenuOpen(null)}
                                                             >
-                                                                <Briefcase size={16} />
+                                                                <Briefcase size={16} strokeWidth={2.5} />
                                                                 إدارة الإسنادات
                                                             </Link>
                                                         )}
                                                         
-                                                        {/* Only SuperAdmin can delete users */}
                                                         {isSuperAdmin && (
                                                             <button
                                                                 onClick={() => {
-                                                                    // TODO: Implement delete functionality
                                                                     setActionMenuOpen(null)
                                                                 }}
-                                                                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                                                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-[14px] font-bold text-rose-600 hover:bg-rose-50 transition-colors border-t border-slate-100 mt-1 pt-2"
                                                             >
-                                                                <Trash2 size={16} />
-                                                                حذف
+                                                                <Trash2 size={16} strokeWidth={2.5} />
+                                                                حذف نهائي
                                                             </button>
                                                         )}
                                                     </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { ArrowRight, Save, X, Eye, EyeOff, User, Mail, Lock, Building, Shield, Trash2 } from 'lucide-react'
 import { useUserStore } from '@/lib/store/useUserStore'
 import { useDepartmentStore } from '@/lib/store/useDepartmentStore'
@@ -9,22 +9,23 @@ import { useRoleStore } from '@/lib/store/useRoleStore'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import { useSuccessToast, useErrorToast } from '@/components/ui/Toast'
 import { LoadingButton } from '@/components/ui/LoadingSpinner'
-import { CreateUserData } from '@/lib/api/client'
+import { apiClient, CreateUserData, type User as ApiUser } from '@/lib/api/client'
 
 interface EditUserPageProps {
-  params: Promise<{
+  params: {
+    userId: string
+  } | Promise<{
     userId: string
   }>
 }
 
 export default function EditUserPage({ params }: EditUserPageProps) {
   const router = useRouter()
+  const routeParams = useParams<{ userId: string }>()
   const [userId, setUserId] = useState<string>('')
   
   const { 
-    users, 
     updateUser, 
-    fetchUser, 
     isLoading, 
     error, 
     clearError 
@@ -50,25 +51,66 @@ export default function EditUserPage({ params }: EditUserPageProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [isEditMode, setIsEditMode] = useState(false)
+  const [directFetchedUser, setDirectFetchedUser] = useState<ApiUser | null>(null)
+  const [isUserLoading, setIsUserLoading] = useState(false)
+
+  const coerceUserPayload = (payload: unknown): ApiUser | null => {
+    const nested = (payload as { data?: unknown })?.data
+    const candidate = (nested && typeof nested === 'object' ? nested : payload) as Partial<ApiUser> | null
+    return candidate && typeof candidate.id === 'string' ? (candidate as ApiUser) : null
+  }
 
   // Get userId from params
   useEffect(() => {
-    params.then(({ userId }) => {
-      setUserId(userId)
+    let isMounted = true
+
+    Promise.resolve(params).then(({ userId }) => {
+      if (isMounted) {
+        setUserId(userId)
+      }
     })
+
+    return () => {
+      isMounted = false
+    }
   }, [params])
+
+  // Fallback for environments where route params are exposed synchronously.
+  useEffect(() => {
+    if (typeof routeParams?.userId === 'string' && routeParams.userId.length > 0) {
+      setUserId(routeParams.userId)
+    }
+  }, [routeParams])
 
   // Load user data and departments
   useEffect(() => {
     if (userId) {
-      fetchUser(userId)
+      setIsUserLoading(true)
       fetchDepartments()
+
+      // Resolve target user directly for this page.
+      apiClient.getUser(userId)
+        .then(response => {
+          const user = coerceUserPayload(response.data)
+          if (response.success && user) {
+            setDirectFetchedUser(user)
+          } else {
+            setDirectFetchedUser(null)
+          }
+        })
+        .catch(() => {
+          setDirectFetchedUser(null)
+        })
+        .finally(() => {
+          setIsUserLoading(false)
+        })
     }
-  }, [userId, fetchUser, fetchDepartments])
+  }, [userId, fetchDepartments])
 
   // Populate form when user data is loaded
   useEffect(() => {
-    const user = users.find(u => u.id === userId)
+    const user = directFetchedUser
+
     if (user) {
       setFormData({
         name: user.name || '',
@@ -80,7 +122,7 @@ export default function EditUserPage({ params }: EditUserPageProps) {
         isActive: user.isActive ?? true
       })
     }
-  }, [users, userId])
+  }, [directFetchedUser])
 
   // Clear errors when form data changes
   useEffect(() => {
@@ -92,8 +134,12 @@ export default function EditUserPage({ params }: EditUserPageProps) {
 
   // Check permissions - only SuperAdmin can update users
   useEffect(() => {
-    const userRole = currentUser?.role?.name
-    if (!userRole || userRole !== 'SuperAdmin') {
+    if (!currentUser) {
+      return
+    }
+
+    const userRole = (currentUser.role?.name || currentUser.roleName || '').toLowerCase()
+    if (userRole !== 'superadmin') {
       errorToast('غير مصرح', 'ليس لديك صلاحية لتعديل المستخدمين')
       router.push('/dashboard')
     }
@@ -173,6 +219,12 @@ export default function EditUserPage({ params }: EditUserPageProps) {
       const success = await updateUser(userId, updateData)
 
       if (success) {
+        const refreshedUser = await apiClient.getUser(userId)
+        const user = coerceUserPayload(refreshedUser.data)
+        if (refreshedUser.success && user) {
+          setDirectFetchedUser(user)
+        }
+
         successToast('تم تحديث المستخدم!', `تم تحديث بيانات ${formData.name} بنجاح`)
         setIsEditMode(false)
         // Clear password fields
@@ -194,7 +246,7 @@ export default function EditUserPage({ params }: EditUserPageProps) {
     if (isEditMode) {
       setIsEditMode(false)
       // Reset form data
-      const user = users.find(u => u.id === userId)
+      const user = directFetchedUser
       if (user) {
         setFormData({
           name: user.name || '',
@@ -212,7 +264,7 @@ export default function EditUserPage({ params }: EditUserPageProps) {
   }
 
   // Get current user data
-  const currentUserData = users.find(u => u.id === userId)
+  const currentUserData = directFetchedUser
 
   // Define system role IDs
   const ROLE_IDS = {
@@ -251,12 +303,12 @@ export default function EditUserPage({ params }: EditUserPageProps) {
 
   const availableDepartments = getAvailableDepartments()
 
-  if (isLoading) {
+  if (isUserLoading || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-600">جاري تحميل بيانات المستخدم...</p>
+      <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in">
+        <div className="flex flex-col items-center gap-5 p-8 bg-white rounded-2xl shadow-sm border border-slate-100 min-w-[300px]">
+          <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
+          <p className="text-[17px] font-bold text-slate-700" dir="rtl">جاري تحميل بيانات المستخدم...</p>
         </div>
       </div>
     )
@@ -264,14 +316,20 @@ export default function EditUserPage({ params }: EditUserPageProps) {
 
   if (!currentUserData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">المستخدم غير موجود</p>
-          <button 
+      <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in">
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-rose-100 p-8 max-w-sm w-full text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-rose-500"></div>
+          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">المستخدم غير موجود</h3>
+          <p className="text-[15px] text-slate-600 mb-8" dir="rtl">لم يتم العثور على بيانات هذا المستخدم.</p>
+          <button
             onClick={() => router.push('/users')}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="w-full px-5 py-3 text-white bg-slate-800 rounded-xl hover:bg-slate-900 transition-colors font-bold shadow-sm"
+            dir="rtl"
           >
-            العودة إلى المستخدمين
+            العودة للقائمة
           </button>
         </div>
       </div>
@@ -279,83 +337,83 @@ export default function EditUserPage({ params }: EditUserPageProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-4xl mx-auto py-6 animate-in fade-in duration-500" dir="rtl">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-4">
+      <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
           <button
             onClick={handleCancel}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 mb-4 border border-slate-200 bg-white shadow-sm rounded-xl text-[14px] font-bold text-slate-700 hover:bg-slate-50 transition-all"
           >
-            <ArrowRight className="h-5 w-5" />
-            <span>العودة إلى المستخدمين</span>
+            <ArrowRight size={16} strokeWidth={2.5} />
+            العودة للمستخدمين
           </button>
-        </div>
-        
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <User className="h-6 w-6 text-blue-600" />
+          <div className="flex items-center gap-4 mt-2">
+            <div className="p-3 bg-indigo-50 rounded-2xl ring-1 ring-indigo-100 shadow-inner">
+              <User size={28} className="text-indigo-600" strokeWidth={2} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
                 {isEditMode ? 'تعديل المستخدم' : 'عرض المستخدم'}
               </h1>
-              <p className="text-gray-600">{currentUserData.name}</p>
+              <p className="text-[15px] font-medium text-slate-500 mt-1">{currentUserData.name}</p>
             </div>
           </div>
-          
-          {!isEditMode && (
-            <button
-              onClick={() => setIsEditMode(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Shield className="h-4 w-4" />
-              تعديل
-            </button>
-          )}
         </div>
+        
+        {!isEditMode && (
+          <button
+            onClick={() => setIsEditMode(true)}
+            className="flex items-center justify-center gap-2.5 px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-500 text-white font-bold rounded-xl hover:from-indigo-700 hover:to-blue-600 transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5"
+          >
+            <Shield size={20} strokeWidth={2.5} />
+            تفعيل وضع التعديل
+          </button>
+        )}
       </div>
 
       {/* Form */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="p-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-1.5 h-full bg-gradient-to-b from-indigo-600 to-blue-500"></div>
+        <div className="p-8 md:p-10">
+          <form onSubmit={handleSubmit} className="space-y-10">
             {/* Personal Information Section */}
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <User className="h-5 w-5 text-gray-500" />
+            <div className={`bg-slate-50/50 p-6 md:p-8 rounded-2xl border ${isEditMode ? 'border-slate-200' : 'border-slate-100'} transition-colors`}>
+              <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3 border-b border-slate-200/60 pb-4">
+                <div className="bg-white p-2 rounded-lg shadow-sm">
+                  <User size={20} className="text-indigo-500" strokeWidth={2.5} />
+                </div>
                 المعلومات الشخصية
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    الاسم الكامل *
+                  <label className="block text-[14px] font-bold text-slate-700 mb-2.5">
+                    الاسم الكامل <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
                     disabled={!isEditMode}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                      !isEditMode ? 'bg-gray-50' : ''
+                    className={`w-full px-4 py-3.5 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 font-bold transition-colors shadow-sm ${
+                      !isEditMode ? 'bg-slate-50 text-slate-500 border-slate-100' : 'bg-white text-slate-900'
                     } ${
-                      validationErrors.name ? 'border-red-500' : 'border-gray-300'
+                      validationErrors.name ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500 hover:border-slate-300'
                     }`}
                     placeholder="أدخل الاسم الكامل"
                     dir="rtl"
                   />
                   {validationErrors.name && (
-                    <p className="mt-1 text-sm text-red-600">{validationErrors.name}</p>
+                    <p className="mt-2 text-[13px] font-bold text-rose-600 flex items-center gap-1"><X size={14} />{validationErrors.name}</p>
                   )}
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    البريد الإلكتروني *
+                  <label className="block text-[14px] font-bold text-slate-700 mb-2.5">
+                    البريد الإلكتروني <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -363,18 +421,18 @@ export default function EditUserPage({ params }: EditUserPageProps) {
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
                       disabled={!isEditMode}
-                      className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                        !isEditMode ? 'bg-gray-50' : ''
+                      className={`w-full px-4 py-3.5 pr-12 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 font-bold transition-colors shadow-sm ${
+                        !isEditMode ? 'bg-slate-50 text-slate-500 border-slate-100' : 'bg-white text-slate-900'
                       } ${
-                        validationErrors.email ? 'border-red-500' : 'border-gray-300'
+                        validationErrors.email ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500 hover:border-slate-300'
                       }`}
                       placeholder="user@example.com"
                       dir="ltr"
                     />
-                    <Mail className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
+                    <Mail className={`absolute right-4 top-4 h-5 w-5 ${!isEditMode ? 'text-slate-300' : 'text-slate-400'}`} strokeWidth={2.5} />
                   </div>
                   {validationErrors.email && (
-                    <p className="mt-1 text-sm text-red-600">{validationErrors.email}</p>
+                    <p className="mt-2 text-[13px] font-bold text-rose-600 flex items-center gap-1"><X size={14} />{validationErrors.email}</p>
                   )}
                 </div>
               </div>
@@ -382,16 +440,18 @@ export default function EditUserPage({ params }: EditUserPageProps) {
 
             {/* Security Section - Only show in edit mode */}
             {isEditMode && (
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
-                  <Lock className="h-5 w-5 text-gray-500" />
+              <div className="bg-slate-50/50 p-6 md:p-8 rounded-2xl border border-slate-200">
+                <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3 border-b border-slate-200/60 pb-4">
+                  <div className="bg-white p-2 rounded-lg shadow-sm">
+                    <Lock size={20} className="text-indigo-500" strokeWidth={2.5} />
+                  </div>
                   تغيير كلمة المرور (اختياري)
                 </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Password */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-[14px] font-bold text-slate-700 mb-2.5">
                       كلمة المرور الجديدة
                     </label>
                     <div className="relative">
@@ -399,27 +459,29 @@ export default function EditUserPage({ params }: EditUserPageProps) {
                         type={showPassword ? 'text' : 'password'}
                         value={formData.password}
                         onChange={(e) => handleInputChange('password', e.target.value)}
-                        className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                          validationErrors.password ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full px-4 py-3.5 pr-12 pl-12 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 text-slate-900 font-bold bg-white transition-colors shadow-sm ${
+                          validationErrors.password ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500 hover:border-slate-300'
                         }`}
-                        placeholder="اتركه فارغاً للاحتفاظ بكلمة المرور الحالية"
+                        placeholder="اتركه فارغاً للاحتفاظ بالحالية"
+                        dir="ltr"
                       />
+                      <Lock className="absolute right-4 top-4 h-5 w-5 text-slate-400" strokeWidth={2.5} />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                        className="absolute left-3 top-3.5 p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                       >
-                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        {showPassword ? <EyeOff size={18} strokeWidth={2.5} /> : <Eye size={18} strokeWidth={2.5} />}
                       </button>
                     </div>
                     {validationErrors.password && (
-                      <p className="mt-1 text-sm text-red-600">{validationErrors.password}</p>
+                      <p className="mt-2 text-[13px] font-bold text-rose-600 flex items-center gap-1"><X size={14} />{validationErrors.password}</p>
                     )}
                   </div>
 
                   {/* Confirm Password */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-[14px] font-bold text-slate-700 mb-2.5">
                       تأكيد كلمة المرور الجديدة
                     </label>
                     <div className="relative">
@@ -427,21 +489,23 @@ export default function EditUserPage({ params }: EditUserPageProps) {
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={formData.confirmPassword}
                         onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                        className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                          validationErrors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                        className={`w-full px-4 py-3.5 pr-12 pl-12 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 text-slate-900 font-bold bg-white transition-colors shadow-sm ${
+                          validationErrors.confirmPassword ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500 hover:border-slate-300'
                         }`}
-                        placeholder="أعد إدخال كلمة المرور الجديدة"
+                        placeholder="أعد إدخال كلمة المرور"
+                        dir="ltr"
                       />
+                      <Shield className="absolute right-4 top-4 h-5 w-5 text-slate-400" strokeWidth={2.5} />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                        className="absolute left-3 top-3.5 p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                       >
-                        {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        {showConfirmPassword ? <EyeOff size={18} strokeWidth={2.5} /> : <Eye size={18} strokeWidth={2.5} />}
                       </button>
                     </div>
                     {validationErrors.confirmPassword && (
-                      <p className="mt-1 text-sm text-red-600">{validationErrors.confirmPassword}</p>
+                      <p className="mt-2 text-[13px] font-bold text-rose-600 flex items-center gap-1"><X size={14} />{validationErrors.confirmPassword}</p>
                     )}
                   </div>
                 </div>
@@ -449,111 +513,118 @@ export default function EditUserPage({ params }: EditUserPageProps) {
             )}
 
             {/* Organization Section */}
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
-                <Building className="h-5 w-5 text-gray-500" />
-                معلومات المؤسسة
-              </h3>
+            <div className={`bg-slate-50/50 p-6 md:p-8 rounded-2xl border ${isEditMode ? 'border-slate-200' : 'border-slate-100'} transition-colors`}>
+              <div className="flex items-center justify-between border-b border-slate-200/60 pb-4 mb-6">
+                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                    <div className="bg-white p-2 rounded-lg shadow-sm">
+                    <Building size={20} className="text-indigo-500" strokeWidth={2.5} />
+                    </div>
+                    محددات المؤسسة
+                </h3>
+                {/* Status Toggle moved up to header in a small badge */}
+                <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <span className={`text-[14px] font-bold ${formData.isActive ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {formData.isActive ? 'حساب قيد التفعيل' : 'حساب معلق'}
+                    </span>
+                    <div className={`relative inline-block w-12 h-6 transition-colors rounded-full ${formData.isActive ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+                        <input
+                        type="checkbox"
+                        checked={formData.isActive}
+                        onChange={(e) => handleInputChange('isActive', e.target.checked)}
+                        disabled={!isEditMode}
+                        className="absolute w-0 h-0 opacity-0"
+                        />
+                        <span className={`absolute max-w-full m-1 w-4 h-4 transition-transform bg-white rounded-full ${formData.isActive ? 'translate-x-[-24px] rtl:-translate-x-6' : 'translate-x-[0px]'}`}></span>
+                    </div>
+                  </label>
+                </div>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Department */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    المديرية *
+                  <label className="block text-[14px] font-bold text-slate-700 mb-2.5">
+                    المديرية المرتبطة <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={formData.departmentId}
                     onChange={(e) => handleInputChange('departmentId', e.target.value)}
                     disabled={!isEditMode}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                      !isEditMode ? 'bg-gray-50' : ''
+                    className={`w-full px-4 py-3.5 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 font-bold transition-colors shadow-sm appearance-none ${
+                        !isEditMode ? 'bg-slate-50 text-slate-500 border-slate-100' : 'bg-white text-slate-900'
                     } ${
-                      validationErrors.departmentId ? 'border-red-500' : 'border-gray-300'
+                      validationErrors.departmentId ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500 hover:border-slate-300'
                     }`}
                   >
-                    <option value="">اختر المديرية</option>
+                    <option value="" disabled>اختر المديرية التابع لها</option>
                     {availableDepartments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
+                      <option key={dept.id} value={dept.id} className="text-slate-900 font-medium">
                         {dept.name}
                       </option>
                     ))}
                   </select>
                   {validationErrors.departmentId && (
-                    <p className="mt-1 text-sm text-red-600">{validationErrors.departmentId}</p>
+                    <p className="mt-2 text-[13px] font-bold text-rose-600 flex items-center gap-1"><X size={14} />{validationErrors.departmentId}</p>
                   )}
                 </div>
 
                 {/* Role */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    الدور *
+                  <label className="block text-[14px] font-bold text-slate-700 mb-2.5">
+                    صلاحيات الدور <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={formData.roleId}
                     onChange={(e) => handleInputChange('roleId', e.target.value)}
                     disabled={!isEditMode}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 ${
-                      !isEditMode ? 'bg-gray-50' : ''
+                    className={`w-full px-4 py-3.5 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 font-bold transition-colors shadow-sm appearance-none ${
+                        !isEditMode ? 'bg-slate-50 text-slate-500 border-slate-100' : 'bg-white text-slate-900'
                     } ${
-                      validationErrors.roleId ? 'border-red-500' : 'border-gray-300'
+                      validationErrors.roleId ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500 hover:border-slate-300'
                     }`}
                   >
-                    <option value="">اختر الدور</option>
+                    <option value="" disabled>تحديد مستوى الوصول</option>
                     {availableRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
+                      <option key={role.id} value={role.id} className="text-slate-900 font-medium">
                         {role.displayName || role.name}
                       </option>
                     ))}
                   </select>
                   {validationErrors.roleId && (
-                    <p className="mt-1 text-sm text-red-600">{validationErrors.roleId}</p>
+                    <p className="mt-2 text-[13px] font-bold text-rose-600 flex items-center gap-1"><X size={14} />{validationErrors.roleId}</p>
                   )}
                 </div>
               </div>
 
-              {/* Status */}
-              <div className="mt-4">
-                <label className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive}
-                    onChange={(e) => handleInputChange('isActive', e.target.checked)}
-                    disabled={!isEditMode}
-                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    المستخدم نشط
-                  </span>
-                </label>
-              </div>
             </div>
 
             {/* Global Error */}
             {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-800 text-sm">{error}</p>
+              <div className="p-5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-3">
+                <div className="bg-rose-100 p-2 rounded-lg text-rose-600"><X size={20} strokeWidth={2.5}/></div>
+                <p className="text-rose-800 text-[15px] font-bold">{error}</p>
               </div>
             )}
 
             {/* Action Buttons */}
             {isEditMode && (
-              <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-end gap-4 pt-4 border-t border-slate-200/80">
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-6 py-3.5 border border-slate-200 bg-white shadow-sm rounded-xl text-[15px] font-bold text-slate-700 hover:bg-slate-50 transition-all hover:shadow"
                 >
-                  <X className="h-4 w-4" />
-                  إلغاء
+                  إلغاء التعديل
                 </button>
                 
                 <LoadingButton
                   type="submit"
                   loading={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex items-center justify-center gap-2.5 px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-blue-500 text-white rounded-xl hover:from-indigo-700 hover:to-blue-600 transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5"
                 >
-                  <Save className="h-4 w-4" />
-                  حفظ التغييرات
+                  <Save size={20} strokeWidth={2.5} />
+                  <span className="font-bold text-[15px]">حفظ التغييرات</span>
                 </LoadingButton>
               </div>
             )}

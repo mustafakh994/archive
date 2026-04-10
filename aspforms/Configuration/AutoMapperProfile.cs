@@ -110,9 +110,19 @@ public class AutoMapperProfile : Profile
             .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
             .ForMember(dest => dest.Status, opt => opt.MapFrom(src => !string.IsNullOrWhiteSpace(src.Status) ? src.Status : "Active"));
 
+        // Only overwrite JSON columns when the client sends them. Mapping null/omitted FormSchema
+        // used to become SerializeJson(null) -> empty string and wiped the database schema on any partial PUT.
         CreateMap<UpdateFormDto, Form>()
-            .ForMember(dest => dest.FormSchema, opt => opt.MapFrom(src => SerializeJson(src.FormSchema ?? string.Empty)))
-            .ForMember(dest => dest.Settings, opt => opt.MapFrom(src => SerializeJson(src.Settings ?? string.Empty)))
+            .ForMember(dest => dest.FormSchema, opt =>
+            {
+                opt.Condition(src => src.FormSchema != null);
+                opt.MapFrom(src => SerializeJson(src.FormSchema));
+            })
+            .ForMember(dest => dest.Settings, opt =>
+            {
+                opt.Condition(src => src.Settings != null);
+                opt.MapFrom(src => SerializeJson(src.Settings));
+            })
             .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
             .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
             .ForMember(dest => dest.DepartmentId, opt => opt.Ignore());

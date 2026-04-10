@@ -33,9 +33,9 @@ export default function GuestFormPage() {
   }, [code, router])
 
   return (
-    <div className="flex flex-col items-center justify-center h-full py-20">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-      <p className="text-gray-500 text-lg" dir="rtl">جاري تحميل نموذج الأرشفة...</p>
+    <div className="flex flex-col items-center justify-center h-[calc(100vh-100px)] py-20 bg-slate-50/50 animate-in fade-in duration-500">
+      <div className="w-16 h-16 border-4 border-slate-200/80 border-t-indigo-600 rounded-full animate-spin mb-6"></div>
+      <p className="text-slate-600 text-lg font-bold" dir="rtl">جاري تحويلك إلى نموذج الأرشفة...</p>
     </div>
   )
 }

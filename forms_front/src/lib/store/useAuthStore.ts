@@ -2,7 +2,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { apiClient, User, LoginCredentials, RegisterData, ApiError, ApiErrorType } from '@/lib/api/client'
+import { apiClient, getPublicApiBaseUrl, User, LoginCredentials, RegisterData, ApiError, ApiErrorType } from '@/lib/api/client'
 import { syncAuthAccessCookie } from '@/lib/auth-cookie'
 
 export interface AuthResponse {
@@ -205,7 +205,7 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         set({ isTokenRefreshing: true })
 
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://api.forms.hamaprov.net'}/api/Auth/refresh`, {
+          const response = await fetch(`${getPublicApiBaseUrl()}/Auth/refresh`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -214,7 +214,10 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           })
 
           if (!response.ok) {
-            throw new Error('Token refresh failed')
+            const detail = await response.text().catch(() => '')
+            throw new Error(
+              `Token refresh failed (${response.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`
+            )
           }
 
           const data = await response.json()

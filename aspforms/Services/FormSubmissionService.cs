@@ -172,6 +172,22 @@ public class FormSubmissionService : IFormSubmissionService
                 query = query.Where(fs => fs.SubmittedAt <= endDate);
             }
 
+            // Apply dynamic field filters inside JSONB data
+            if (searchDto.DynamicFilters != null && searchDto.DynamicFilters.Any())
+            {
+                foreach (var filter in searchDto.DynamicFilters)
+                {
+                    if (!string.IsNullOrEmpty(filter.Value))
+                    {
+                        var key = filter.Key;
+                        // Use string-based JSON matching as a fallback for Npgsql 8.0 to ensure build success
+                        // This searches for the key and value in proximity within the JSON text
+                        var searchPattern = $"%\"{key}\":%\"{filter.Value}%\"%";
+                        query = query.Where(fs => EF.Functions.ILike(Convert.ToString(fs.ResponseData), searchPattern));
+                    }
+                }
+            }
+
             // Apply text search inside JSONB data and other text limits
             if (!string.IsNullOrEmpty(searchDto.Search))
             {

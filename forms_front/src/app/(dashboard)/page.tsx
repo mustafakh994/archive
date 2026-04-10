@@ -205,100 +205,112 @@ export default function DashboardHomePage() {
   const totalArchivedDocuments = stats.formArchiveStats.reduce((sum, item) => sum + item.archivedCount, 0)
 
   return (
-    <div className="space-y-8" dir="rtl">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-8 animate-in fade-in duration-500" dir="rtl">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-4xl font-bold text-gray-900">لوحة التحكم</h1>
-          <p className="mt-2 text-lg text-gray-600">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">لوحة التحكم</h1>
+          <p className="mt-2 text-lg text-slate-500 font-medium max-w-2xl">
             ملخص سريع لعدد المستخدمين والأدوار والقوالب والوثائق المؤرشفة.
           </p>
         </div>
         <div className="flex gap-3">
           <Link
             href="/users"
-            className="rounded-lg border border-gray-200 bg-white px-4 py-2 font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+            className="rounded-xl border border-slate-200 bg-white shadow-sm px-5 py-2.5 font-bold text-slate-700 transition-all hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 hover:shadow"
           >
             المستخدمون
           </Link>
           <Link
             href="/forms"
-            className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-blue-700"
+            className="rounded-xl px-5 py-2.5 font-bold text-white transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600"
           >
             القوالب
           </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <span className="rounded-full bg-blue-100 p-3 text-blue-700">
-              <Users className="h-6 w-6" />
-            </span>
-            <span className="text-sm font-medium text-gray-500">إجمالي المستخدمين</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden group hover:shadow-md transition-all duration-300">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-blue-500 rounded-r-xl"></div>
+          <div className="flex items-center justify-between z-10 relative pl-2">
+            <div>
+              <p className="text-sm font-bold text-slate-500 mb-1 leading-tight" dir="rtl">إجمالي المستخدمين</p>
+              <p className="text-3xl font-black text-slate-900 tracking-tight leading-none mt-2">{stats.userCount}</p>
+            </div>
+            <div className="bg-blue-50/80 p-3.5 rounded-xl text-blue-600 group-hover:scale-110 group-hover:bg-blue-100 transition-all duration-300 ring-4 ring-white shadow-sm">
+              <Users size={22} strokeWidth={2.5} />
+            </div>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{stats.userCount}</p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <span className="rounded-full bg-emerald-100 p-3 text-emerald-700">
-              <Building className="h-6 w-6" />
-            </span>
-            <span className="text-sm font-medium text-gray-500">إجمالي الأقسام</span>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden group hover:shadow-md transition-all duration-300">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-emerald-500 rounded-r-xl"></div>
+          <div className="flex items-center justify-between z-10 relative pl-2">
+            <div>
+              <p className="text-sm font-bold text-slate-500 mb-1 leading-tight" dir="rtl">إجمالي الأقسام</p>
+              <p className="text-3xl font-black text-slate-900 tracking-tight leading-none mt-2">{totalDepartments}</p>
+            </div>
+            <div className="bg-emerald-50/80 p-3.5 rounded-xl text-emerald-600 group-hover:scale-110 group-hover:bg-emerald-100 transition-all duration-300 ring-4 ring-white shadow-sm">
+              <Building size={22} strokeWidth={2.5} />
+            </div>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{totalDepartments}</p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <span className="rounded-full bg-violet-100 p-3 text-violet-700">
-              <FileText className="h-6 w-6" />
-            </span>
-            <span className="text-sm font-medium text-gray-500">إجمالي القوالب</span>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden group hover:shadow-md transition-all duration-300">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-violet-500 rounded-r-xl"></div>
+          <div className="flex items-center justify-between z-10 relative pl-2">
+            <div>
+              <p className="text-sm font-bold text-slate-500 mb-1 leading-tight" dir="rtl">إجمالي القوالب</p>
+              <p className="text-3xl font-black text-slate-900 tracking-tight leading-none mt-2">{stats.formCount}</p>
+            </div>
+            <div className="bg-violet-50/80 p-3.5 rounded-xl text-violet-600 group-hover:scale-110 group-hover:bg-violet-100 transition-all duration-300 ring-4 ring-white shadow-sm">
+              <FileText size={22} strokeWidth={2.5} />
+            </div>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{stats.formCount}</p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <span className="rounded-full bg-amber-100 p-3 text-amber-700">
-              <Archive className="h-6 w-6" />
-            </span>
-            <span className="text-sm font-medium text-gray-500">إجمالي الوثائق المؤرشفة</span>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 relative overflow-hidden group hover:shadow-md transition-all duration-300">
+          <div className="absolute top-0 right-0 w-1.5 h-full bg-amber-500 rounded-r-xl"></div>
+          <div className="flex items-center justify-between z-10 relative pl-2">
+            <div>
+              <p className="text-sm font-bold text-slate-500 mb-1 leading-tight" dir="rtl">الوثائق المؤرشفة</p>
+              <p className="text-3xl font-black text-slate-900 tracking-tight leading-none mt-2">{totalArchivedDocuments}</p>
+            </div>
+            <div className="bg-amber-50/80 p-3.5 rounded-xl text-amber-600 group-hover:scale-110 group-hover:bg-amber-100 transition-all duration-300 ring-4 ring-white shadow-sm">
+              <Archive size={22} strokeWidth={2.5} />
+            </div>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{totalArchivedDocuments}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-6 py-4">
-            <h2 className="text-xl font-bold text-gray-900">عدد المستخدمين في كل قسم</h2>
+        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all hover:shadow-md">
+          <div className="border-b border-slate-100 px-6 py-5 bg-slate-50/50">
+            <h2 className="text-[17px] font-bold text-slate-900">عدد المستخدمين في كل قسم</h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-sm text-gray-600">
-              <thead className="bg-gray-50 text-sm font-semibold text-gray-700">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-right text-sm text-slate-600">
+              <thead className="bg-slate-50 text-[13px] font-bold text-slate-500 uppercase tracking-wider">
                 <tr>
-                  <th className="px-6 py-4">القسم</th>
-                  <th className="px-6 py-4">كود القسم</th>
-                  <th className="px-6 py-4">عدد المستخدمين</th>
+                  <th className="px-6 py-4 border-b border-slate-200">القسم</th>
+                  <th className="px-6 py-4 border-b border-slate-200">كود القسم</th>
+                  <th className="px-6 py-4 border-b border-slate-200">عدد المستخدمين</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {stats.departmentUserStats.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={3} className="px-6 py-12 text-center text-slate-500 font-medium">
                       لا توجد بيانات أقسام لعرضها.
                     </td>
                   </tr>
                 ) : (
                   stats.departmentUserStats.map((item) => (
-                    <tr key={item.departmentId} className="border-t border-gray-100">
-                      <td className="px-6 py-4">{item.departmentName}</td>
-                      <td className="px-6 py-4">{item.departmentCode}</td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-blue-100 px-3 py-1 font-semibold text-blue-800">
+                    <tr key={item.departmentId} className="hover:bg-indigo-50/30 transition-colors">
+                      <td className="px-6 py-4.5 font-bold text-slate-700">{item.departmentName}</td>
+                      <td className="px-6 py-4.5 font-mono text-slate-500">{item.departmentCode}</td>
+                      <td className="px-6 py-4.5">
+                        <span className="inline-flex items-center justify-center min-w-[2rem] rounded-md bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
                           {item.userCount}
                         </span>
                       </td>
@@ -310,47 +322,14 @@ export default function DashboardHomePage() {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-6 py-4">
-            <h2 className="text-xl font-bold text-gray-900">عدد الوثائق المؤرشفة لكل قالب</h2>
+        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all hover:shadow-md flex flex-col">
+          <div className="border-b border-slate-100 px-6 py-5 bg-slate-50/50">
+            <h2 className="text-[17px] font-bold text-slate-900">عدد الوثائق المؤرشفة لكل قالب</h2>
           </div>
-          <FormArchiveBarChart rows={stats.formArchiveStats} />
-          {/* جدول عدد الوثائق المؤرشفة لكل قالب — معطّل مؤقتاً
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-sm text-gray-600">
-              <thead className="bg-gray-50 text-sm font-semibold text-gray-700">
-                <tr>
-                  <th className="px-6 py-4">القالب</th>
-                  <th className="px-6 py-4">الجهة</th>
-                  <th className="px-6 py-4">الوثائق المؤرشفة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.formArchiveStats.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
-                      لا توجد قوالب لعرضها.
-                    </td>
-                  </tr>
-                ) : (
-                  stats.formArchiveStats.map((item) => (
-                    <tr key={item.formId} className="border-t border-gray-100">
-                      <td className="px-6 py-4 font-medium text-gray-900">{item.formTitle}</td>
-                      <td className="px-6 py-4">{item.departmentName}</td>
-                      <td className="px-6 py-4">
-                        <span className="rounded-full bg-amber-100 px-3 py-1 font-semibold text-amber-800">
-                          {item.archivedCount}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="flex-1 p-6">
+            <FormArchiveBarChart rows={stats.formArchiveStats} />
           </div>
-          */}
         </section>
-
       </div>
     </div>
   )

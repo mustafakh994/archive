@@ -121,57 +121,62 @@ export default function NewFormPage() {
   // Show department selector for SuperAdmin
   if (showDepartmentSelector && !selectedDepartmentId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 max-w-md w-full">
-          <div className="text-center mb-6">
-            <svg className="w-16 h-16 text-blue-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2" dir="rtl">
-              اختر القسم للنموذج الجديد
+      <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in duration-300">
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-200/60 p-8 md:p-10 max-w-lg w-full relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-600 to-blue-500"></div>
+          
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-indigo-50 rounded-full mb-6 ring-8 ring-white shadow-sm">
+              <svg className="w-10 h-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900 mb-2 tracking-tight" dir="rtl">
+              تحديد قسم القالب
             </h2>
-            <p className="text-gray-600" dir="rtl">
-              كمسؤول، يجب عليك تحديد القسم الذي سينتمي إليه هذا النموذج
+            <p className="text-[17px] text-slate-500 font-medium" dir="rtl">
+              كمسؤول نظام، يرجى تحديد القسم الذي سينتمي إليه هذا القالب الجديد.
             </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2" dir="rtl">
-                القسم <span className="text-red-500">*</span>
+              <label className="block text-[15px] font-bold text-slate-700 mb-2.5" dir="rtl">
+                القسم المسؤول <span className="text-rose-500">*</span>
               </label>
-              <SearchableDropdown
-                options={departments}
-                value={selectedDepartmentId}
-                onChange={setSelectedDepartmentId}
-                placeholder="اختر القسم..."
-                searchPlaceholder="البحث في الأقسام..."
-                loading={loadingDepartments}
-                className="w-full"
-                dir="rtl"
-              />
+              <div className="relative">
+                <SearchableDropdown
+                  options={departments}
+                  value={selectedDepartmentId}
+                  onChange={setSelectedDepartmentId}
+                  placeholder="اختر القسم..."
+                  searchPlaceholder="البحث في الأقسام..."
+                  loading={loadingDepartments}
+                  className="w-full text-right"
+                  dir="rtl"
+                />
+              </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-4 pt-4 mt-8 border-t border-slate-100">
               <button
                 onClick={() => router.push('/forms')}
-                className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                className="flex-1 px-5 py-3.5 text-[15px] text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition-all font-bold shadow-sm hover:shadow"
                 dir="rtl"
               >
-                إلغاء
+                إلغاء التحديد
               </button>
               <button
                 onClick={() => {
                   if (selectedDepartmentId) {
-                    // This will trigger form creation in useEffect
                     setShowDepartmentSelector(false)
                   }
                 }}
                 disabled={!selectedDepartmentId}
-                className="flex-1 px-4 py-3 text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                className="flex-1 px-5 py-3.5 text-white bg-gradient-to-r from-indigo-600 to-blue-500 rounded-xl hover:from-indigo-700 hover:to-blue-600 disabled:opacity-50 disabled:from-slate-400 disabled:to-slate-400 disabled:shadow-none transition-all font-bold shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5"
                 dir="rtl"
               >
-                إنشاء النموذج
+                المتابعة للإنشاء
               </button>
             </div>
           </div>
@@ -182,10 +187,10 @@ export default function NewFormPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-600" dir="rtl">جاري إنشاء النموذج...</p>
+      <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in">
+        <div className="flex flex-col items-center gap-5 p-8 bg-white rounded-2xl shadow-sm border border-slate-100 min-w-[300px]">
+          <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
+          <p className="text-[17px] font-bold text-slate-700" dir="rtl">جاري إنشاء القالب المبدئي...</p>
         </div>
       </div>
     )
@@ -193,15 +198,20 @@ export default function NewFormPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4" dir="rtl">خطأ: {error}</p>
+      <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in">
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-rose-100 p-8 max-w-sm w-full text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-rose-500"></div>
+          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">فشل الإنشاء</h3>
+          <p className="text-[15px] text-slate-600 mb-8" dir="rtl">{error}</p>
           <button
             onClick={() => router.push('/forms')}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="w-full px-5 py-3 text-white bg-slate-800 rounded-xl hover:bg-slate-900 transition-colors font-bold shadow-sm"
             dir="rtl"
           >
-            العودة إلى النماذج
+            العودة للقائمة
           </button>
         </div>
       </div>
@@ -209,10 +219,10 @@ export default function NewFormPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-gray-600" dir="rtl">جاري التوجيه إلى منشئ قوالب الوثائق...</p>
+    <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in">
+      <div className="flex flex-col items-center gap-5 p-8 bg-white rounded-2xl shadow-sm border border-slate-100 min-w-[300px]">
+        <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
+        <p className="text-[17px] font-bold text-slate-700" dir="rtl">جاري التوجيه إلى محرر قوالب الوثائق...</p>
       </div>
     </div>
   )

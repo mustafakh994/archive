@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { PlusCircle, MoreHorizontal, Copy, Edit, Trash2, Eye, Play, Pause, BarChart3 } from 'lucide-react'
+import { PlusCircle, MoreHorizontal, Copy, Edit, Trash2, Eye, Play, Pause, BarChart3, FileText, Building } from 'lucide-react'
 import { useFormStore } from '@/lib/store/useFormStore'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import Link from 'next/link'
@@ -179,89 +179,102 @@ export default function FormsListPage() {
             </div>
         )
     }
+    
     return (
-        <div>
+        <div className="space-y-8 animate-in fade-in duration-500" dir="rtl">
             {!Array.isArray(forms) && (
-                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-yellow-800 text-lg font-medium" dir="rtl">
-                        ⚠️ API غير متاح. يتم عرض بيانات تجريبية.
-                    </p>
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-3 text-amber-800">
+                        <div className="bg-amber-100 p-2 rounded-lg">⚠️</div>
+                        <p className="text-lg font-bold" dir="rtl">API غير متاح. يتم عرض بيانات تجريبية.</p>
+                    </div>
                 </div>
             )}
-            <div className="flex items-center justify-between mb-8 rtl:flex-row-reverse">
-                <h1 className="text-4xl font-bold text-gray-900" dir="rtl">قوالب الوثائق</h1>
+            
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tight" dir="rtl">قوالب الوثائق</h1>
+                    <p className="mt-2 text-lg text-slate-500 font-medium">إدارة جميع قوالب الأرشفة وإنشاء قوالب جديدة.</p>
+                </div>
                 <Link
                     href="/forms/new"
-                    className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold rtl:flex-row-reverse"
+                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-white transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 w-full md:w-auto"
                 >
-                    <PlusCircle size={24} />
+                    <PlusCircle size={22} strokeWidth={2.5} />
                     <span>إنشاء قالب جديد</span>
                 </Link>
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-base text-gray-500" dir="rtl">
-                        <thead className="text-lg text-gray-700 uppercase bg-gray-50">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden transition-all hover:shadow-md">
+                <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-right text-sm text-slate-600" dir="rtl">
+                        <thead className="bg-slate-50 text-[13px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
                             <tr>
-                                <th scope="col" className="px-6 py-4 text-right font-semibold">عنوان القالب</th>
-                                <th scope="col" className="px-6 py-4 text-right font-semibold">القسم</th>
-                                <th scope="col" className="px-6 py-4 text-right font-semibold">الكود</th>
-                                <th scope="col" className="px-6 py-4 text-right font-semibold">الإصدار</th>
-                                <th scope="col" className="px-6 py-4 text-right font-semibold">الحالة</th>
-                                <th scope="col" className="px-6 py-4 text-right font-semibold">تاريخ الإنشاء</th>
-                                <th scope="col" className="px-6 py-4 text-right font-semibold">آخر تحديث</th>
-                                <th scope="col" className="px-6 py-4 text-center font-semibold">الإجراءات</th>
+                                <th scope="col" className="px-6 py-5">عنوان القالب</th>
+                                <th scope="col" className="px-6 py-5">القسم</th>
+                                <th scope="col" className="px-6 py-5">الكود</th>
+                                <th scope="col" className="px-6 py-5">الإصدار</th>
+                                <th scope="col" className="px-6 py-5">الحالة</th>
+                                <th scope="col" className="px-6 py-5">تاريخ الإنشاء</th>
+                                <th scope="col" className="px-6 py-5">آخر تحديث</th>
+                                <th scope="col" className="px-6 py-5 text-center">الإجراءات</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-slate-100">
                             {!displayForms || displayForms.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                                        <p className="text-xl font-medium" dir="rtl">لا توجد قوالب بعد. ابدأ بإنشاء قالب جديد.</p>
+                                    <td colSpan={8} className="px-6 py-16 text-center text-slate-500">
+                                        <div className="flex flex-col items-center justify-center gap-3">
+                                            <FileText className="w-12 h-12 text-slate-300" strokeWidth={1.5} />
+                                            <p className="text-[17px] font-bold text-slate-600">لا توجد قوالب بعد. ابدأ بإنشاء قالب جديد.</p>
+                                        </div>
                                     </td>
                                 </tr>
                             ) : (
                                 displayForms.map((form) => (
-                                    <tr key={form.id} className="bg-white border-b hover:bg-gray-50">
-                                        <th scope="row" className="px-6 py-6 font-semibold text-gray-900 text-right">
-                                            <div className="flex flex-col items-start">
+                                    <tr key={form.id} className="hover:bg-indigo-50/30 transition-colors group">
+                                        <th scope="row" className="px-6 py-4.5 font-semibold text-slate-900">
+                                            <div className="flex flex-col items-start gap-1">
                                                 <Link
                                                     href={`/forms/${form.id}`}
-                                                    className="hover:text-blue-600 transition-colors font-semibold text-lg text-right"
+                                                    className="hover:text-indigo-600 transition-colors font-bold text-[16px] text-right"
                                                 >
                                                     {form.title || form.name}
                                                 </Link>
                                                 {form.description && (
-                                                    <p className="text-base text-gray-500 mt-2 truncate max-w-xs text-right">
+                                                    <p className="text-[14px] text-slate-500 truncate max-w-[200px] text-right font-medium">
                                                         {form.description}
                                                     </p>
                                                 )}
                                             </div>
                                         </th>
-                                        <td className="px-6 py-6 text-gray-900 text-base text-right">
-                                            <div className="flex items-center gap-2">
-                                                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                                </svg>
-                                                <span className="font-medium">
+                                        <td className="px-6 py-4.5 text-[15px] font-bold text-slate-700">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="bg-indigo-100 p-1.5 rounded-lg text-indigo-600 group-hover:scale-110 transition-transform">
+                                                    <Building size={16} strokeWidth={2.5} />
+                                                </div>
+                                                <span>
                                                     {form.departmentName || form.organization?.name || 'غير محدد'}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-6 text-gray-600 font-mono text-base text-right">
-                                            {form.code || form.id.slice(0, 8)}
+                                        <td className="px-6 py-4.5">
+                                            <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-2.5 py-1 text-sm font-mono font-bold text-slate-700 border border-slate-200">
+                                                {form.code || form.id.slice(0, 8)}
+                                            </span>
                                         </td>
-                                        <td className="px-6 py-6 text-gray-600 text-base text-right">
-                                            v{form.version || 1}
+                                        <td className="px-6 py-4.5">
+                                            <span className="inline-flex items-center justify-center rounded-full bg-slate-50 px-2.5 py-1 text-[13px] font-bold text-slate-600 border border-slate-200 shadow-sm">
+                                                v{form.version || 1}
+                                            </span>
                                         </td>
-                                        <td className="px-6 py-6 text-right">
+                                        <td className="px-6 py-4.5">
                                             <div className="flex justify-start">
-                                                <span className={`px-3 py-2 rounded-full text-base font-semibold ${form.status === 'Active' || form.isPublished
-                                                    ? 'bg-green-100 text-green-800'
+                                                <span className={`px-3 py-1.5 rounded-full text-[13px] font-bold ring-1 ring-inset ${form.status === 'Active' || form.isPublished
+                                                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
                                                     : form.status === 'Inactive'
-                                                        ? 'bg-red-100 text-red-800'
-                                                        : 'bg-yellow-100 text-yellow-800'
+                                                        ? 'bg-rose-50 text-rose-700 ring-rose-600/20'
+                                                        : 'bg-amber-50 text-amber-700 ring-amber-600/20'
                                                     }`}>
                                                     {form.status === 'Active' || (form.isPublished && !form.status)
                                                         ? 'نشط'
@@ -271,62 +284,62 @@ export default function FormsListPage() {
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-6 text-gray-600 text-base text-right">
+                                        <td className="px-6 py-4.5 text-[14px] font-semibold text-slate-600">
                                             <TableDate date={form.createdAt} />
                                         </td>
-                                        <td className="px-6 py-6 text-gray-600 text-base text-right">
+                                        <td className="px-6 py-4.5 text-[14px] font-semibold text-slate-600">
                                             <TableDate date={form.updatedAt || form.createdAt} />
                                         </td>
-                                        <td className="px-6 py-6">
-                                            <div className="flex items-center justify-center gap-2 flex-wrap">
+                                        <td className="px-6 py-4.5">
+                                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
                                                 {actionLoading === form.id ? (
-                                                    <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                                                    <div className="w-5 h-5 border-2 border-slate-300 border-t-indigo-600 rounded-full animate-spin"></div>
                                                 ) : (
                                                     <>
                                                         <Link
                                                             href={`/submissions/new/${form.id}`}
-                                                            className="p-3 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors ring-1 ring-transparent hover:ring-indigo-100"
                                                             title="أرشفة وثيقة جديدة"
                                                         >
-                                                            <PlusCircle size={20} />
+                                                            <PlusCircle size={18} strokeWidth={2.5} />
                                                         </Link>
                                                         <Link
                                                             href={`/responses?formId=${form.id}`}
-                                                            className="p-3 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-lg transition-colors"
+                                                            className="p-2 text-violet-600 hover:text-violet-700 hover:bg-violet-50 rounded-lg transition-colors ring-1 ring-transparent hover:ring-violet-100"
                                                             title="عرض السجلات المؤرشفة"
                                                         >
-                                                            <BarChart3 size={20} />
+                                                            <BarChart3 size={18} strokeWidth={2.5} />
                                                         </Link>
                                                         <Link
                                                             href={`/forms/${form.id}/edit`}
-                                                            className="p-3 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                                                            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors ring-1 ring-transparent hover:ring-slate-200"
                                                             title="تحرير القالب"
                                                         >
-                                                            <Edit size={20} />
+                                                            <Edit size={18} strokeWidth={2.5} />
                                                         </Link>
                                                         <button
                                                             onClick={() => handleDuplicateForm(form.id, (form.title || form.name) ?? 'Untitled')}
-                                                            className="p-3 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                                                            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors ring-1 ring-transparent hover:ring-slate-200"
                                                             title="نسخ القالب"
                                                         >
-                                                            <Copy size={20} />
+                                                            <Copy size={18} strokeWidth={2.5} />
                                                         </button>
                                                         <button
                                                             onClick={() => handleToggleStatus(form.id, form.status === 'Active' || form.isPublished)}
-                                                            className={`p-3 rounded-lg transition-colors font-semibold ${form.status === 'Active' || form.isPublished
-                                                                ? 'text-orange-600 hover:text-orange-800 hover:bg-orange-50 bg-orange-100'
-                                                                : 'text-green-600 hover:text-green-800 hover:bg-green-50 bg-green-100'
+                                                            className={`p-2 rounded-lg transition-colors ring-1 ring-transparent ${form.status === 'Active' || form.isPublished
+                                                                ? 'text-amber-600 hover:text-amber-800 hover:bg-amber-50 hover:ring-amber-200'
+                                                                : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 hover:ring-emerald-200'
                                                                 }`}
                                                             title={form.status === 'Active' || form.isPublished ? 'تعطيل القالب' : 'تفعيل القالب'}
                                                         >
-                                                            {form.status === 'Active' || form.isPublished ? <Pause size={20} /> : <Play size={20} />}
+                                                            {form.status === 'Active' || form.isPublished ? <Pause size={18} strokeWidth={2.5} /> : <Play size={18} strokeWidth={2.5} />}
                                                         </button>
                                                         <button
                                                             onClick={() => handleDeleteForm(form.id)}
-                                                            className="p-3 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                                                            className="p-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors ring-1 ring-transparent hover:ring-rose-200"
                                                             title="حذف القالب"
                                                         >
-                                                            <Trash2 size={20} />
+                                                            <Trash2 size={18} strokeWidth={2.5} />
                                                         </button>
                                                     </>
                                                 )}
@@ -339,6 +352,6 @@ export default function FormsListPage() {
                     </table>
                 </div>
             </div>
-        </div >
+        </div>
     )
 } 

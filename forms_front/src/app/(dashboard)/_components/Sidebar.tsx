@@ -40,51 +40,56 @@ export default function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
         : baseNavItems
 
     return (
-        <aside className={`flex-shrink-0 bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}>
-            <div className="h-16 flex-shrink-0 px-4 flex items-center justify-center border-b border-gray-200">
-                <Link href="/forms">
-                    <h1 className={`text-2xl font-bold text-gray-900 whitespace-nowrap ${isCollapsed ? 'hidden' : 'block'}`} dir="rtl">نظام الأرشفة المتقدم</h1>
-                    <ClipboardList className={`h-10 w-10 text-blue-600 ${isCollapsed ? 'block' : 'hidden'}`} />
+        <aside className={`flex-shrink-0 bg-white border-r border-slate-200 flex flex-col transition-all duration-300 ease-in-out shadow-sm ${isCollapsed ? 'w-20' : 'w-72'}`}>
+            <div className="h-20 flex-shrink-0 px-6 flex items-center justify-center border-b border-slate-100/60">
+                <Link href="/forms" className="flex items-center gap-3">
+                    <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+                        <ClipboardList className="h-7 w-7" strokeWidth={2.5} />
+                    </div>
+                    <h1 className={`text-xl font-bold bg-clip-text text-transparent bg-gradient-to-l from-indigo-700 to-slate-800 whitespace-nowrap tracking-tight ${isCollapsed ? 'hidden' : 'block'}`} dir="rtl">نظام الأرشفة المتقدم</h1>
                 </Link>
             </div>
-            <div className="flex-1 overflow-y-auto">
-                <nav className={`py-6 ${isCollapsed ? 'px-2' : 'px-4'}`}>
-                    <div className="mb-6">
-                        <Link href="/submissions/new" className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-semibold" dir="rtl">
-                            <PlusCircle size={24} />
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <nav className={`py-6 ${isCollapsed ? 'px-3' : 'px-5'}`}>
+                    <div className="mb-8">
+                        <Link href="/submissions/new" className="w-full flex items-center justify-center gap-3 px-4 py-3.5 bg-gradient-to-r from-indigo-600 to-blue-500 text-white rounded-xl hover:from-indigo-700 hover:to-blue-600 transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 text-base font-bold" dir="rtl">
+                            <PlusCircle size={22} strokeWidth={2.5} />
                             <span className={isCollapsed ? 'sr-only' : ''}>أرشفة وثيقة جديدة</span>
                         </Link>
                     </div>
-                    <ul className="space-y-2">
-                        {navItems.map((item) => (
-                            <li key={item.href}>
-                                <Link
-                                    href={item.href}
-                                    title={isCollapsed ? item.label : undefined}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-lg font-semibold ${pathname.startsWith(item.href)
-                                        ? 'bg-gray-100 text-gray-700'
-                                        : 'text-gray-600 hover:bg-gray-50'
-                                        } ${isCollapsed ? 'justify-center' : ''}`}
-                                    dir="rtl"
-                                >
-                                    <item.icon size={24} />
-                                    <span className={isCollapsed ? 'sr-only' : ''}>{item.label}</span>
-                                </Link>
-                            </li>
-                        ))}
+                    <ul className="space-y-1.5">
+                        {navItems.map((item) => {
+                            const isActive = pathname.startsWith(item.href);
+                            return (
+                                <li key={item.href}>
+                                    <Link
+                                        href={item.href}
+                                        title={isCollapsed ? item.label : undefined}
+                                        className={`flex items-center gap-4 px-4 py-3.5 rounded-xl text-[15px] font-bold transition-all duration-200 ${isActive
+                                            ? 'bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-500/10'
+                                            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:shadow-sm'
+                                            } ${isCollapsed ? 'justify-center' : ''}`}
+                                        dir="rtl"
+                                    >
+                                        <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'} />
+                                        <span className={isCollapsed ? 'sr-only' : ''}>{item.label}</span>
+                                    </Link>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </nav>
             </div>
 
             {/* Logout Button */}
-            <div className={`p-4 border-t border-gray-200 ${isCollapsed ? 'px-2' : 'px-4'}`}>
+            <div className={`p-5 border-t border-slate-100 ${isCollapsed ? 'px-3' : 'px-5'}`}>
                 <button
                     onClick={handleLogout}
                     title={isCollapsed ? 'تسجيل الخروج' : undefined}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-lg font-semibold text-red-600 hover:bg-red-50 transition-colors ${isCollapsed ? 'justify-center' : ''}`}
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-[15px] font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 ring-1 ring-transparent hover:ring-rose-100 transition-all shadow-sm hover:shadow ${isCollapsed ? 'justify-center' : ''}`}
                     dir="rtl"
                 >
-                    <LogOut size={24} />
+                    <LogOut size={22} strokeWidth={2.5} />
                     <span className={isCollapsed ? 'sr-only' : ''}>تسجيل الخروج</span>
                 </button>
             </div>

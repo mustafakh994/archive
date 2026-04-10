@@ -225,7 +225,7 @@ export default function UserAssignmentsPage({ params }: UserAssignmentsPageProps
 
   if (isPageLoading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="min-h-[60vh] flex items-center justify-center animate-in fade-in">
         <LoadingSpinner size="lg" text="جاري تحميل إسنادات المستخدم..." />
       </div>
     )
@@ -233,159 +233,208 @@ export default function UserAssignmentsPage({ params }: UserAssignmentsPageProps
 
   if (!isSuperAdmin) {
     return (
-      <div className="max-w-3xl mx-auto">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700" dir="rtl">
-          {error || 'ليس لديك صلاحية للوصول إلى هذه الصفحة'}
+      <div className="max-w-3xl mx-auto py-10">
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-rose-100 p-8 max-w-lg mx-auto w-full text-center relative overflow-hidden" dir="rtl">
+          <div className="absolute top-0 left-0 w-full h-1 bg-rose-500"></div>
+          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">⚠️</span>
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">صلاحيات غير كافية</h3>
+          <p className="text-[15px] text-slate-600 mb-8">{error || 'هذه الصفحة متاحة فقط لمدراء النظام.'}</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
+    <div className="max-w-6xl mx-auto py-6 space-y-8 animate-in fade-in duration-500" dir="rtl">
+      {/* Header Container */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">إدارة إسنادات المستخدم</h1>
-          <p className="mt-1 text-gray-600">{userName || 'مستخدم'}</p>
+          <Link
+            href="/users"
+             className="inline-flex items-center gap-2 px-4 py-2 mb-4 border border-slate-200 bg-white shadow-sm rounded-xl text-[14px] font-bold text-slate-700 hover:bg-slate-50 transition-all"
+          >
+            <ArrowRight size={16} strokeWidth={2.5} />
+            العودة للمستخدمين
+          </Link>
+          <div className="flex items-center gap-4 mt-2">
+            <div className="p-3 bg-indigo-50 rounded-2xl ring-1 ring-indigo-100 shadow-inner">
+              <User size={28} className="text-indigo-600" strokeWidth={2} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">إسنادات الصلاحيات</h1>
+              <p className="text-[15px] font-medium text-slate-500 mt-1">
+                إدارة أدوار <span className="font-bold text-indigo-600">{userName || 'المستخدم'}</span> عبر المديريات
+              </p>
+            </div>
+          </div>
         </div>
-
-        <Link
-          href="/users"
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-        >
-          <ArrowRight className="h-4 w-4" />
-          العودة إلى المستخدمين
-        </Link>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          {error}
+        <div className="p-5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-3">
+            <div className="bg-rose-100 p-2 rounded-lg text-rose-600"><Trash2 size={20} strokeWidth={2.5}/></div>
+            <p className="text-rose-800 text-[15px] font-bold">{error}</p>
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-900">
-          <PlusCircle className="h-5 w-5 text-blue-600" />
-          إضافة إسناد جديد
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* ADD NEW ASSIGNMENT SIDEBAR */}
+        <div className="lg:col-span-1">
+            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden relative p-6 md:p-8 sticky top-6">
+                <div className="absolute top-0 right-0 w-1.5 h-full bg-gradient-to-b from-indigo-500 to-indigo-600"></div>
+                <div className="mb-6 flex items-center gap-3 border-b border-slate-200/60 pb-4">
+                <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600">
+                    <PlusCircle size={22} strokeWidth={2.5} />
+                </div>
+                <h2 className="text-[18px] font-black text-slate-900">إضافة إسناد جديد</h2>
+                </div>
+
+                <form onSubmit={handleCreateAssignment} className="space-y-6">
+                <div>
+                    <label className="block text-[14px] font-bold text-slate-700 mb-2.5">المديرية <span className="text-rose-500">*</span></label>
+                    <select
+                    value={selectedDepartmentId}
+                    onChange={(e) => setSelectedDepartmentId(e.target.value)}
+                    className="w-full px-4 py-3.5 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 font-bold bg-slate-50 border-slate-200 focus:border-indigo-500 hover:border-slate-300 text-slate-900 transition-colors shadow-sm appearance-none"
+                    >
+                    <option value="" disabled>اختر المديرية التابع لها</option>
+                    {departments.map((department) => (
+                        <option key={department.id} value={department.id}>
+                        {department.name}
+                        </option>
+                    ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label className="block text-[14px] font-bold text-slate-700 mb-2.5">الدور <span className="text-rose-500">*</span></label>
+                    <select
+                    value={selectedRoleId}
+                    onChange={(e) => setSelectedRoleId(e.target.value)}
+                    className={`w-full px-4 py-3.5 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 font-bold shadow-sm appearance-none transition-colors ${
+                        !selectedDepartmentId ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-50 border-slate-200 focus:border-indigo-500 hover:border-slate-300 text-slate-900'
+                    }`}
+                    disabled={!selectedDepartmentId}
+                    >
+                    <option value="" disabled>حدد مستوى الوصول</option>
+                    {availableRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                        {role.displayName || role.name}
+                        </option>
+                    ))}
+                    </select>
+                </div>
+
+                <div className="pt-2">
+                    <LoadingButton
+                    type="submit"
+                    loading={isSubmitting}
+                    loadingText="جاري التنفيذ..."
+                    className="w-full flex items-center justify-center gap-2.5 py-3.5 bg-gradient-to-r from-indigo-600 to-blue-500 text-white rounded-xl hover:from-indigo-700 hover:to-blue-600 transition-all font-bold shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 text-[15px]"
+                    >
+                        <PlusCircle size={18} strokeWidth={2.5}/>
+                    تنفيذ الإسناد
+                    </LoadingButton>
+                </div>
+                </form>
+            </div>
         </div>
 
-        <form onSubmit={handleCreateAssignment} className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">المديرية</label>
-            <select
-              value={selectedDepartmentId}
-              onChange={(e) => setSelectedDepartmentId(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">اختر المديرية</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* ASSIGNMENTS TABLE AREA */}
+        <div className="lg:col-span-2">
+            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+                <div className="border-b border-slate-200/60 px-6 py-5 bg-slate-50/50">
+                <h2 className="flex items-center gap-3 text-[18px] font-black text-slate-900">
+                    <div className="bg-white p-2 rounded-lg shadow-sm">
+                        <Briefcase size={20} className="text-indigo-500" strokeWidth={2.5} />
+                    </div>
+                    إسنادات المستخدم الحالية
+                </h2>
+                </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">الدور</label>
-            <select
-              value={selectedRoleId}
-              onChange={(e) => setSelectedRoleId(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={!selectedDepartmentId}
-            >
-              <option value="">اختر الدور</option>
-              {availableRoles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.displayName || role.name}
-                </option>
-              ))}
-            </select>
-          </div>
+                <div className="overflow-x-auto">
+                <table className="w-full text-right border-collapse">
+                    <thead className="bg-white border-b border-slate-200">
+                    <tr>
+                        <th className="px-6 py-4 font-bold text-[14px] text-slate-500 tracking-wide uppercase">المديرية</th>
+                        <th className="px-6 py-4 font-bold text-[14px] text-slate-500 tracking-wide uppercase">الدور</th>
+                        <th className="px-6 py-4 font-bold text-[14px] text-slate-500 tracking-wide uppercase">تاريخ التوثيق</th>
+                        <th className="px-6 py-4 font-bold text-[14px] text-slate-500 tracking-wide uppercase">الحالة</th>
+                        <th className="px-6 py-4 font-bold text-[14px] text-slate-500 tracking-wide uppercase flex justify-end">تعديل</th>
+                    </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-slate-50/20">
+                    {assignments.length === 0 ? (
+                        <tr>
+                        <td colSpan={5} className="px-6 py-16 text-center">
+                            <div className="flex flex-col items-center justify-center text-slate-400">
+                                <Briefcase size={48} className="mb-4 opacity-20" strokeWidth={1} />
+                                <p className="text-[16px] font-bold text-slate-500 text-center">لا توجد أي إسنادات أو أدوار معينة لهذا المستخدم حتى الآن.</p>
+                            </div>
+                        </td>
+                        </tr>
+                    ) : (
+                        assignments.map((assignment) => (
+                        <tr key={assignment.id} className="hover:bg-slate-50/80 transition-colors group">
+                            <td className="px-6 py-4 text-[15px] font-bold text-slate-900 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                    {assignment.departmentName || 'غير محدد'}
+                                </div>
+                            </td>
+                            <td className="px-6 py-4 text-[15px] font-medium text-slate-700 whitespace-nowrap">
+                                {assignment.roleName || 'غير محدد'}
+                            </td>
+                            <td className="px-6 py-4 text-[14px] text-slate-500 font-medium whitespace-nowrap">
+                            <TableDate date={assignment.createdAt} />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-bold ${
+                                assignment.isActive 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${assignment.isActive ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                {assignment.isActive ? 'صلاحية نشطة' : 'معطل مؤقتاً'}
+                            </span>
+                            </td>
+                            <td className="px-6 py-4">
+                            <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <button
+                                type="button"
+                                onClick={() => handleToggleAssignment(assignment)}
+                                disabled={isUpdatingId === assignment.id}
+                                title={assignment.isActive ? "تعطيل" : "تفعيل"}
+                                className={`p-2 rounded-lg transition-colors border ${
+                                    assignment.isActive 
+                                    ? 'border-amber-200 text-amber-600 hover:bg-amber-50 hover:border-amber-300' 
+                                    : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300'
+                                } disabled:opacity-50 shadow-sm`}
+                                >
+                                {assignment.isActive ? <ToggleLeft size={18} strokeWidth={2.5}/> : <ToggleRight size={18} strokeWidth={2.5}/>}
+                                </button>
 
-          <div className="flex items-end">
-            <LoadingButton
-              type="submit"
-              loading={isSubmitting}
-              loadingText="جاري الحفظ..."
-              className="w-full rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-            >
-              إضافة الإسناد
-            </LoadingButton>
-          </div>
-        </form>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 px-6 py-4">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-            <Briefcase className="h-5 w-5 text-blue-600" />
-            الإسنادات الحالية
-          </h2>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-right">
-            <thead className="bg-gray-50 text-sm text-gray-600">
-              <tr>
-                <th className="px-6 py-3 font-semibold">المديرية</th>
-                <th className="px-6 py-3 font-semibold">الدور</th>
-                <th className="px-6 py-3 font-semibold">الحالة</th>
-                <th className="px-6 py-3 font-semibold">تاريخ الإنشاء</th>
-                <th className="px-6 py-3 font-semibold">الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {assignments.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
-                    لا توجد إسنادات لهذا المستخدم حتى الآن.
-                  </td>
-                </tr>
-              ) : (
-                assignments.map((assignment) => (
-                  <tr key={assignment.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-gray-900">{assignment.departmentName || 'غير محدد'}</td>
-                    <td className="px-6 py-4 text-gray-900">{assignment.roleName || 'غير محدد'}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
-                        assignment.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {assignment.isActive ? 'نشط' : 'معطل'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      <TableDate date={assignment.createdAt} />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleAssignment(assignment)}
-                          disabled={isUpdatingId === assignment.id}
-                          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {assignment.isActive ? <ToggleLeft className="h-4 w-4" /> : <ToggleRight className="h-4 w-4" />}
-                          {assignment.isActive ? 'تعطيل' : 'تفعيل'}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAssignment(assignment)}
-                          disabled={isUpdatingId === assignment.id}
-                          className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          حذف
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                                <button
+                                type="button"
+                                onClick={() => handleDeleteAssignment(assignment)}
+                                disabled={isUpdatingId === assignment.id}
+                                title="حذف"
+                                className="p-2 rounded-lg transition-colors border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 disabled:opacity-50 shadow-sm"
+                                >
+                                <Trash2 size={18} strokeWidth={2.5} />
+                                </button>
+                            </div>
+                            </td>
+                        </tr>
+                        ))
+                    )}
+                    </tbody>
+                </table>
+                </div>
+            </div>
         </div>
       </div>
     </div>

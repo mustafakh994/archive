@@ -6,6 +6,17 @@ import { logError, logWarning, logInfo } from '../utils/errorLogger'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.forms.hamaprov.net'
 
+/**
+ * Public API root including a single `/api` segment (matches ApiClient constructor).
+ * Use for direct fetch() calls (e.g. auth refresh) so env values like `http://localhost:5000/api`
+ * are not turned into `/api/api/...`.
+ */
+export function getPublicApiBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL || 'https://api.forms.hamaprov.net'
+  const trimmed = raw.replace(/\/+$/, '')
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`
+}
+
 // Cache configuration
 interface CacheEntry<T> {
   data: T
@@ -1188,23 +1199,22 @@ class ApiClient {
   }
 
   // Guest form endpoints - uses authenticated request() to forward token to backend
-  async getGuestFormPreview(formId: string): Promise<ApiResponse<Form>> {
-    // Call /forms/{id} directly with the user's JWT token
-    return this.request(`/forms/${formId}`, {}, false, 0)
+  async getGuestFormPreview(formIdOrCode: string): Promise<ApiResponse<Form>> {
+    // First try by ID endpoint for regular dashboard navigation.
+    try {
+      return await this.request(`/forms/${formIdOrCode}`, {}, false, 0)
+    } catch (error) {
+      // Fallback to code-based preview endpoint for QR / code-based flows.
+      if (error instanceof ApiError && error.statusCode === 404) {
+        return this.request(`/forms/code/${encodeURIComponent(formIdOrCode)}/preview`, {}, false, 0)
+      }
+      throw error
+    }
   }
 
   async getGuestFormPreviewByCode(code: string): Promise<ApiResponse<Form>> {
-    // Fetch all forms and find the matching one by code, since there is no backend /forms/code/{code} endpoint
-    const response = await this.request<{ items: Form[] }>('/forms?pageSize=200', {}, false, 0)
-    if (!response.success || !response.data) {
-      return { success: false, message: response.message || 'Failed to load forms', data: null, errors: response.errors }
-    }
-    const forms = response.data.items || []
-    const found = forms.find((f: any) => f.code === code || f.id === code)
-    if (!found) {
-      return { success: false, message: 'Form not found', data: null, errors: ['النموذج غير موجود'] }
-    }
-    return { success: true, data: found as unknown as Form, message: 'OK', errors: [] }
+    // Use the dedicated backend endpoint for code-based preview.
+    return this.request(`/forms/code/${encodeURIComponent(code)}/preview`, {}, false, 0)
   }
 
   // Internal submit form endpoint (requires authentication)

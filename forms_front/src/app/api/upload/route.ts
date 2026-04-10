@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import crypto from 'crypto'
 import { encryptAttachmentBuffer, isAttachmentEncryptionEnabled } from '@/lib/attachment-crypto'
 
 export async function POST(request: NextRequest) {
@@ -45,10 +46,11 @@ export async function POST(request: NextRequest) {
       await mkdir(uploadDir, { recursive: true })
     }
 
+    // Keep human-readable name for UI/download only, but store encrypted bytes under an opaque name.
     const originalName = file.name.replace(/[^a-zA-Z0-9._\u0600-\u06FF\-]/g, '_')
     const timestamp = Date.now()
-    const filename = `${timestamp}_${fieldId}_${originalName}`
-    const filePath = join(uploadDir, filename)
+    const storageName = `aenc_${timestamp}_${crypto.randomUUID().replace(/-/g, '')}.aenc`
+    const filePath = join(uploadDir, storageName)
 
     const bytes = await file.arrayBuffer()
     const plain = Buffer.from(bytes)
@@ -56,14 +58,16 @@ export async function POST(request: NextRequest) {
 
     await writeFile(filePath, toWrite)
 
-    const url = `/api/attachments/download?submissionId=${encodeURIComponent(submissionId)}&file=${encodeURIComponent(filename)}`
+    // file = original display/download name, stored = encrypted blob filename on disk.
+    const url = `/api/attachments/download?submissionId=${encodeURIComponent(submissionId)}&file=${encodeURIComponent(originalName)}&stored=${encodeURIComponent(storageName)}`
 
     console.log(`File saved (private, encrypted): ${filePath}`)
 
     return NextResponse.json({
       success: true,
       url,
-      filename,
+      filename: originalName,
+      storedFilename: storageName,
       size: file.size,
       message: 'File uploaded successfully',
     })

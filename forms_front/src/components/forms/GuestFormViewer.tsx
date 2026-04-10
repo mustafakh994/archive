@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle, Loader2, Send } from 'lucide-react'
 import { loadGoogleFont } from '@/lib/utils/arabicGoogleFonts'
 import SignaturePad from '@/components/forms/SignaturePad'
 import { useAuthStore } from '@/lib/store/useAuthStore'
+import { uploadFormDataWithProgress } from '@/lib/uploadWithProgress'
 
 interface GuestFormViewerProps {
   formCode?: string
@@ -37,6 +38,9 @@ export default function GuestFormViewer({
   const [showSuccess, setShowSuccess] = useState(false)
   const [submissionResult, setSubmissionResult] = useState<any>(null)
   const [fileUploading, setFileUploading] = useState<Record<string, boolean>>({})
+  const [fileUploadProgress, setFileUploadProgress] = useState<Record<string, number>>({})
+  const [attachmentsUploading, setAttachmentsUploading] = useState(false)
+  const [attachmentsUploadPercent, setAttachmentsUploadPercent] = useState(0)
   const [tempSubmissionId] = useState(() => `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
   const [documentAttachments, setDocumentAttachments] = useState<string[]>([])
   const [attachmentsError, setAttachmentsError] = useState<string>('')
@@ -81,6 +85,7 @@ export default function GuestFormViewer({
 
   const handleFileUpload = async (fieldId: string, file: File) => {
     setFileUploading(prev => ({ ...prev, [fieldId]: true }))
+    setFileUploadProgress(prev => ({ ...prev, [fieldId]: 0 }))
 
     try {
       const uploadFormData = new FormData()
@@ -88,21 +93,15 @@ export default function GuestFormViewer({
       uploadFormData.append('submissionId', tempSubmissionId)
       uploadFormData.append('fieldId', fieldId)
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: uploadFormData
+      const result = await uploadFormDataWithProgress('/api/upload', uploadFormData, (pct) => {
+        setFileUploadProgress(prev => ({ ...prev, [fieldId]: pct }))
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to upload file')
-      }
-
-      const result = await response.json()
       console.log('File saved locally:', result)
 
-      // Store the local file URL in form data
-      handleInputChange(fieldId, result.url)
+      setFileUploadProgress(prev => ({ ...prev, [fieldId]: 100 }))
+      const url = typeof result.url === 'string' ? result.url : ''
+      handleInputChange(fieldId, url)
     } catch (error) {
       console.error('Error uploading file:', error)
       const errorMessage = error instanceof Error ? error.message : 'فشل رفع الملف. يرجى المحاولة مرة أخرى.'
@@ -110,6 +109,11 @@ export default function GuestFormViewer({
       handleInputChange(fieldId, '')
     } finally {
       setFileUploading(prev => ({ ...prev, [fieldId]: false }))
+      setFileUploadProgress(prev => {
+        const next = { ...prev }
+        delete next[fieldId]
+        return next
+      })
     }
   }
 
@@ -486,6 +490,7 @@ export default function GuestFormViewer({
 
       case 'file_upload':
         const isUploading = fileUploading[field.id]
+        const uploadPct = fileUploadProgress[field.id]
         return (
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
             <input
@@ -508,6 +513,17 @@ export default function GuestFormViewer({
                   <>
                     <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
                     <p className="mt-2 text-base text-blue-600">جاري رفع الملف...</p>
+                    <div className="w-full max-w-sm mx-auto mt-4 px-2" dir="ltr">
+                      <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-600 transition-[width] duration-200 ease-out rounded-full"
+                          style={{ width: `${uploadPct ?? 0}%` }}
+                        />
+                      </div>
+                      <p className="text-sm text-blue-600 mt-2 font-medium">
+                        {uploadPct != null && uploadPct > 0 ? `${uploadPct}%` : 'جاري الإرسال...'}
+                      </p>
+                    </div>
                   </>
                 ) : (
                   <>
@@ -1155,8 +1171,11 @@ export default function GuestFormViewer({
                   onChange={async (e: React.ChangeEvent<HTMLInputElement>) => {
                     const files = e.target.files
                     if (files && files.length > 0) {
+                      setAttachmentsUploading(true)
+                      setAttachmentsUploadPercent(0)
                       try {
                         const newAttachments = [...documentAttachments]
+                        const total = files.length
                         for (let i = 0; i < files.length; i++) {
                           const file = files[i]
                           const uploadFormData = new FormData()
@@ -1164,39 +1183,61 @@ export default function GuestFormViewer({
                           uploadFormData.append('submissionId', tempSubmissionId)
                           uploadFormData.append('fieldId', 'system_attachments')
 
-                          const response = await fetch('/api/upload', {
-                            method: 'POST',
-                            body: uploadFormData
+                          const result = await uploadFormDataWithProgress('/api/upload', uploadFormData, (pct) => {
+                            const overall = Math.round(((i + pct / 100) / total) * 100)
+                            setAttachmentsUploadPercent(Math.min(100, overall))
                           })
 
-                          if (!response.ok) {
-                            const errorData = await response.json()
-                            throw new Error(errorData.error || 'Failed to upload file')
-                          }
-
-                          const result = await response.json()
-                          newAttachments.push(result.url)
+                          const url = typeof result.url === 'string' ? result.url : ''
+                          if (url) newAttachments.push(url)
                         }
                         setDocumentAttachments(newAttachments)
                         setAttachmentsError('')
+                        setAttachmentsUploadPercent(100)
                       } catch (error) {
                         console.error('Error uploading file:', error)
                         const errorMessage = error instanceof Error ? error.message : 'فشل رفع الملف. يرجى المحاولة مرة أخرى.'
                         alert(errorMessage)
+                      } finally {
+                        setAttachmentsUploading(false)
+                        setAttachmentsUploadPercent(0)
+                        e.target.value = ''
                       }
                     }
                   }}
                   className="hidden"
                   id="system-attachments-upload"
                   accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  disabled={attachmentsUploading}
                 />
-                <label htmlFor="system-attachments-upload" className="cursor-pointer">
+                <label
+                  htmlFor="system-attachments-upload"
+                  className={attachmentsUploading ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'cursor-pointer'}
+                >
                   <div className="text-gray-900">
-                    <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    <p className="mt-2 text-base text-gray-900">اضغط لاختيار ملفات مستندات أو اسحبها هنا</p>
-                    <p className="text-sm text-gray-500 mt-1">PDF, الصور, والمستندات</p>
+                    {attachmentsUploading ? (
+                      <>
+                        <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
+                        <p className="mt-2 text-base text-blue-600">جاري رفع المرفقات...</p>
+                        <div className="w-full max-w-sm mx-auto mt-4 px-2" dir="ltr">
+                          <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-blue-600 transition-[width] duration-200 ease-out rounded-full"
+                              style={{ width: `${attachmentsUploadPercent}%` }}
+                            />
+                          </div>
+                          <p className="text-sm text-blue-600 mt-2 font-medium">{attachmentsUploadPercent}%</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <p className="mt-2 text-base text-gray-900">اضغط لاختيار ملفات مستندات أو اسحبها هنا</p>
+                        <p className="text-sm text-gray-500 mt-1">PDF, الصور, والمستندات</p>
+                      </>
+                    )}
                   </div>
                 </label>
 

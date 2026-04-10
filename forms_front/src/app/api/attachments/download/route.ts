@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
-import jwt from 'jsonwebtoken'
 import {
   decryptAttachmentBuffer,
   isAttachmentEncryptionEnabled,
   looksLikeEncryptedAttachmentPackage,
 } from '@/lib/attachment-crypto'
 import { AUTH_ACCESS_COOKIE } from '@/lib/auth-cookie'
-import { getJwtVerificationSecret } from '@/lib/server-jwt-secret'
 
 function extractJwt(request: NextRequest): string | null {
   const auth = request.headers.get('authorization')
@@ -27,14 +25,24 @@ function extractJwt(request: NextRequest): string | null {
   return null
 }
 
-function verifyJwt(request: NextRequest): boolean {
+async function verifyJwt(request: NextRequest): Promise<boolean> {
   const token = extractJwt(request)
   if (!token) return false
-  const secret = getJwtVerificationSecret()
-  if (!secret) return false
+
+  const configured = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+  const apiBase = configured.endsWith('/api') ? configured : `${configured}/api`
+  const profileUrl = `${apiBase}/Auth/profile`
+
   try {
-    jwt.verify(token, secret)
-    return true
+    const res = await fetch(profileUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    })
+    return res.ok
   } catch {
     return false
   }
@@ -68,7 +76,7 @@ function safeBasename(name: string): string | null {
 }
 
 export async function GET(request: NextRequest) {
-  if (!verifyJwt(request)) {
+  if (!(await verifyJwt(request))) {
     return NextResponse.json(
       {
         error: 'Unauthorized',
@@ -81,12 +89,15 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const submissionId = searchParams.get('submissionId')
   const fileParam = searchParams.get('file')
+  const storedParam = searchParams.get('stored')
   if (!submissionId || !fileParam) {
     return NextResponse.json({ error: 'Missing submissionId or file' }, { status: 400 })
   }
 
-  const basename = safeBasename(fileParam)
-  if (!basename) {
+  // fileParam is the user-visible original filename; storedParam is the encrypted blob name on disk.
+  const downloadName = safeBasename(fileParam)
+  const storageName = safeBasename(storedParam || fileParam)
+  if (!downloadName || !storageName) {
     return NextResponse.json({ error: 'Invalid file' }, { status: 400 })
   }
 
@@ -94,7 +105,7 @@ export async function GET(request: NextRequest) {
   // الملفات محفوظة مباشرة داخل data/uploads_private بدون مجلد فرعي لكل submissionId.
   // نحتفظ بـ submissionId في الـ query string فقط لأغراض منطقية/تتبّع، وليس كجزء من مسار الملفات.
   const privateRoot = join(process.cwd(), 'data', 'uploads_private')
-  const filePath = join(privateRoot, basename)
+  const filePath = join(privateRoot, storageName)
 
   if (!filePath.startsWith(privateRoot)) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
@@ -118,15 +129,15 @@ export async function GET(request: NextRequest) {
       body = decryptAttachmentBuffer(stored)
     }
 
-    const ext = basename.split('.').pop()?.toLowerCase() ?? ''
+    const ext = downloadName.split('.').pop()?.toLowerCase() ?? ''
     const inlineTypes = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'pdf']
     const disposition = inlineTypes.includes(ext) ? 'inline' : 'attachment'
 
     return new NextResponse(body, {
       status: 200,
       headers: {
-        'Content-Type': contentTypeForFilename(basename),
-        'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(basename)}`,
+        'Content-Type': contentTypeForFilename(downloadName),
+        'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
         'Cache-Control': 'private, no-store',
       },
     })

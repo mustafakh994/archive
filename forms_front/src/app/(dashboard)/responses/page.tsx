@@ -14,7 +14,8 @@ import {
   Mail,
   FileText,
   User,
-  FileSpreadsheet
+  FileSpreadsheet,
+  AlertCircle
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import {
@@ -576,17 +577,27 @@ function AdvancedSearchContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3" dir="rtl">البحث المتقدم للوثائق المؤرشفة</h1>
-          <p className="text-lg text-gray-600" dir="rtl">استخدم محرك البحث أو الفلاتر المتاحة للعثور على الوثائق المطلوبة</p>
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 py-8" dir="rtl">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-indigo-50 rounded-2xl ring-1 ring-indigo-100 shadow-inner">
+            <Search className="text-indigo-600" size={28} strokeWidth={2.5} />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">البحث المتقدم للوثائق</h1>
+            <p className="text-[15px] font-medium text-slate-500 mt-1">استخدم محرك البحث أو الفلاتر المتاحة للعثور على الوثائق المطلوبة.</p>
+          </div>
         </div>
+      </div>
 
+      <div className="grid grid-cols-1 gap-6">
         {/* Form Selector (Optional) */}
-        <div className="bg-white rounded-lg shadow mb-6 p-6">
-          <label className="block text-lg font-bold text-gray-900 mb-3">اختر قالب الوثيقة (اختياري للبحث المخصص)</label>
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6">
+          <label className="block text-[15px] font-bold text-slate-700 mb-3 flex items-center gap-2">
+            <FileText size={18} className="text-indigo-500" strokeWidth={2.5} />
+            اختر قالب الوثيقة (اختياري للبحث المخصص)
+          </label>
           <SearchableDropdown
             options={formOptions}
             value={selectedFormId}
@@ -600,40 +611,43 @@ function AdvancedSearchContent() {
         </div>
 
         {/* Filters and Actions */}
-        {/* Filters and Actions */}
-        <div className="bg-white rounded-lg shadow mb-6 p-4">
-          <div className="flex flex-col lg:flex-row gap-4 mb-4">
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6">
+          <div className="flex flex-col lg:flex-row gap-4 mb-5">
             {/* Search */}
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} strokeWidth={2.5} />
                 <input
                   type="text"
                   placeholder="البحث داخل الوثائق (مثال: رقم الوثيقة، اسم الموظف)..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pr-10 pl-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                  className="w-full pr-12 pl-4 py-3 text-[14px] font-medium border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 hover:bg-slate-50/50 transition-colors text-slate-900 placeholder:text-slate-400"
                   dir="rtl"
                 />
               </div>
             </div>
 
             {/* Date Filters */}
-            <div className="flex gap-2 items-center">
-              <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">من:</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-              />
-              <label className="text-sm font-semibold text-gray-700 whitespace-nowrap mr-2">إلى:</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-              />
+            <div className="flex flex-wrap lg:flex-nowrap gap-3 items-center">
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                <label className="text-[13px] font-bold text-slate-500 whitespace-nowrap">من</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-transparent border-none focus:ring-0 text-[14px] font-medium text-slate-700 outline-none p-0 cursor-pointer"
+                />
+              </div>
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
+                <label className="text-[13px] font-bold text-slate-500 whitespace-nowrap">إلى</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-transparent border-none focus:ring-0 text-[14px] font-medium text-slate-700 outline-none p-0 cursor-pointer"
+                />
+              </div>
             </div>
 
             {/* Sort */}
@@ -641,7 +655,7 @@ function AdvancedSearchContent() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                className="px-4 py-3 text-[14px] font-bold border border-slate-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 text-slate-700 cursor-pointer"
                 dir="rtl"
               >
                 <option value="submittedAt">تاريخ الأرشفة</option>
@@ -650,29 +664,32 @@ function AdvancedSearchContent() {
 
               <button
                 onClick={() => setSortDescending(!sortDescending)}
-                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="p-3 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 hover:text-indigo-600 text-slate-500 transition-colors"
                 title={sortDescending ? 'ترتيب تنازلي' : 'ترتيب تصاعدي'}
               >
-                <ArrowUpDown size={24} className={sortDescending ? 'rotate-180' : ''} />
+                <ArrowUpDown size={20} className={sortDescending ? 'rotate-180 transition-transform' : 'transition-transform'} strokeWidth={2.5} />
               </button>
             </div>
           </div>
 
           {/* Page Size & Stats Info */}
           {submissions && (
-            <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-2">
+            <div className="flex items-center justify-between border-t border-slate-100 pt-5 mt-2">
               <div className="flex items-center gap-4">
-                <p className="text-sm text-gray-600 font-semibold" dir="rtl">إجمالي الوثائق المُطابقة: <span className="text-blue-600 text-base">{submissions.totalItems || (submissions as any).TotalItems || 0}</span></p>
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 text-[13px] font-bold border border-indigo-100/50">
+                  إجمالي الوثائق المُطابقة:
+                  <span className="text-indigo-900 bg-white px-2 py-0.5 rounded shadow-sm">{submissions.totalItems || (submissions as any).TotalItems || 0}</span>
+                </span>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-black" dir="rtl">عدد العناصر:</label>
+              <div className="flex items-center gap-3">
+                <label className="text-[13px] font-bold text-slate-500" dir="rtl">النتائج في الصفحة:</label>
                 <select
                   value={pageSize}
                   onChange={(e) => {
                     setPageSize(Number(e.target.value))
                     setPage(1)
                   }}
-                  className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                  className="px-2 py-1 text-[13px] font-bold border border-slate-200 rounded-lg focus:outline-none bg-slate-50 text-slate-700 cursor-pointer"
                 >
                   <option value="10">10</option>
                   <option value="20">20</option>
@@ -683,37 +700,39 @@ function AdvancedSearchContent() {
             </div>
           )}
         </div>
+      </div>
 
         {/* Loading State */}
         {loading && (
-          <div className="bg-white rounded-lg shadow p-12">
-            <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-12">
+            <div className="flex flex-col items-center justify-center">
+              <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+              <p className="text-center text-[17px] font-bold text-slate-700" dir="rtl">جاري البحث في الوثائق...</p>
             </div>
-            <p className="text-center text-xl text-gray-600 mt-4" dir="rtl">جاري البحث في الوثائق...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-            <p className="text-xl text-red-800" dir="rtl">{error}</p>
+          <div className="bg-rose-50 border border-rose-200 rounded-3xl p-6 mb-6 flex flex-col items-center justify-center text-center">
+            <AlertCircle className="text-rose-600 mb-3" size={32} strokeWidth={2.5} />
+            <p className="text-[17px] font-bold text-rose-800" dir="rtl">{error}</p>
           </div>
         )}
 
         {/* Submissions Table */}
-        {!loading && !error && submissions && (
+        {!loading && !error && submissions && submissions.items.length > 0 && (
           <>
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-slate-200/80">
+                  <thead className="bg-slate-50 border-b border-slate-100">
                     <tr>
                       {selectedFormId && formFields.length > 0 ? (
                         // Dynamic Headers for Selected Form
                         <>
                           {formFields.slice(0, 5).map(field => (
-                            <th key={field.id} className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                            <th key={field.id} className="px-4 py-4 text-right text-[13px] font-bold text-slate-600 uppercase tracking-wider">
                               {field.properties.label}
                             </th>
                           ))}
@@ -721,29 +740,29 @@ function AdvancedSearchContent() {
                       ) : (
                         // Default Headers for All Forms
                         <>
-                          <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          <th className="px-4 py-4 text-right text-[13px] font-bold text-slate-600 uppercase tracking-wider">
                             رقم الوثيقة
                           </th>
-                          <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          <th className="px-4 py-4 text-right text-[13px] font-bold text-slate-600 uppercase tracking-wider">
                             قالب الوثيقة
                           </th>
-                          <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          <th className="px-4 py-4 text-right text-[13px] font-bold text-slate-600 uppercase tracking-wider">
                             الموظف / صاحب العلاقة
                           </th>
-                          <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                          <th className="px-4 py-4 text-right text-[13px] font-bold text-slate-600 uppercase tracking-wider">
                             تاريخ الأرشفة
                           </th>
                         </>
                       )}
-                      <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      <th className="px-4 py-4 text-right text-[13px] font-bold text-slate-600 uppercase tracking-wider">
                         المرفقات
                       </th>
-                      <th className="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      <th className="px-4 py-4 text-right text-[13px] font-bold text-slate-600 uppercase tracking-wider">
                         الإجراءات
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white divide-y divide-slate-100">
                     {(submissions.items || (submissions as any).Items || []).map((submission: any) => {
                       const data = parseResponseData(submission)
 
@@ -770,12 +789,12 @@ function AdvancedSearchContent() {
                       })
 
                       return (
-                        <tr key={submission.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={submission.id} className="hover:bg-indigo-50/30 transition-colors group">
                           {selectedFormId && formFields.length > 0 ? (
                             // Dynamic Cells
                             <>
                               {formFields.slice(0, 5).map(field => (
-                                <td key={field.id} className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <td key={field.id} className="px-4 py-4 whitespace-nowrap text-[14px] font-medium text-slate-700">
                                   {data[field.id] ? (
                                     typeof data[field.id] === 'string' && data[field.id].length > 30
                                       ? data[field.id].substring(0, 30) + '...'
@@ -787,29 +806,34 @@ function AdvancedSearchContent() {
                           ) : (
                             // Default Cells
                             <>
-                              <td className="px-3 py-4 whitespace-nowrap text-sm font-bold text-blue-800 bg-blue-50/30">
+                              <td className="px-4 py-4 whitespace-nowrap text-[14px] font-bold text-indigo-700">
                                 {data['system_documentNumber'] || data['document_number'] || '-'}
                               </td>
-                              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-4 whitespace-nowrap text-[14px] font-bold text-slate-700">
                                 {submission.formName || 'وثيقة عامة'}
                               </td>
-                              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {data['system_userName'] || data['user_name'] || (submission.submitterEmail || (submission as any).SubmitterEmail || '').split('@')[0]}
+                              <td className="px-4 py-4 whitespace-nowrap text-[14px] font-medium text-slate-600">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                                    <User size={12} strokeWidth={2.5} />
+                                  </div>
+                                  {data['system_userName'] || data['user_name'] || (submission.submitterEmail || (submission as any).SubmitterEmail || '').split('@')[0]}
+                                </div>
                               </td>
-                              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                              <td className="px-4 py-4 whitespace-nowrap text-[13px] font-bold text-slate-600">
                                 {data['system_entryDate'] || data['entry_date'] || formatDate(submission.submittedAt || (submission as any).SubmittedAt).split(',')[0]}
                               </td>
                             </>
                           )}
 
                           {/* Attachments Column */}
-                          <td className="px-3 py-4 whitespace-nowrap">
-                            <div className="flex -space-x-reverse space-x-1">
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex -space-x-reverse space-x-1.5">
                               {attachments.length > 0 ? (
                                 attachments.slice(0, 3).map((att, idx) => {
                                   const isPdf = att.url.toLowerCase().includes('.pdf')
                                   const needsAuth = isApiAttachmentDownloadUrl(att.url)
-                                  const btnClass = `p-1.5 rounded-md transition-colors ${isPdf ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`
+                                  const btnClass = `p-1.5 rounded-lg border transition-colors flex items-center justify-center w-8 h-8 ${isPdf ? 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100'}`
                                   return needsAuth ? (
                                     <button
                                       key={idx}
@@ -822,7 +846,7 @@ function AdvancedSearchContent() {
                                         )
                                       }}
                                     >
-                                      {isPdf ? <FileText size={16} /> : <Eye size={16} />}
+                                      {isPdf ? <FileText size={14} strokeWidth={2.5} /> : <Eye size={14} strokeWidth={2.5} />}
                                     </button>
                                   ) : (
                                     <a
@@ -833,29 +857,29 @@ function AdvancedSearchContent() {
                                       title={`View ${att.key}`}
                                       className={btnClass}
                                     >
-                                      {isPdf ? <FileText size={16} /> : <Eye size={16} />}
+                                      {isPdf ? <FileText size={14} strokeWidth={2.5} /> : <Eye size={14} strokeWidth={2.5} />}
                                     </a>
                                   )
                                 })
                               ) : (
-                                <span className="text-gray-300 text-xs">لا يوجد</span>
+                                <span className="text-slate-400 text-[13px] font-medium bg-slate-50 px-2 py-1 rounded-lg">لا يوجد</span>
                               )}
                               {attachments.length > 3 && (
-                                <span className="text-gray-400 text-xs flex items-center pr-1">+{attachments.length - 3}</span>
+                                <span className="text-slate-500 text-[12px] font-bold flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 border border-slate-200">+{attachments.length - 3}</span>
                               )}
                             </div>
                           </td>
 
-                          <td className="px-3 py-4 whitespace-nowrap text-sm font-bold">
+                          <td className="px-4 py-4 whitespace-nowrap text-[14px]">
                             <button
                               onClick={() => {
                                 setSelectedSubmission(submission)
                                 fetchFormSchema(submission.formId)
                               }}
-                              className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
                             >
-                              <Eye size={16} />
-                              عرض كامل
+                              <Eye size={14} strokeWidth={2.5} />
+                              التفاصيل
                             </button>
                           </td>
                         </tr>
@@ -867,37 +891,37 @@ function AdvancedSearchContent() {
             </div>
 
             {/* Pagination */}
-            <div className="bg-white rounded-lg shadow mt-4 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-black" dir="rtl">
-                  عرض <span className="font-semibold">{((page - 1) * pageSize) + 1}</span> إلى{' '}
-                  <span className="font-semibold">
+            <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_4px_14px_rgb(0,0,0,0.02)] mt-6 px-6 py-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-[14px] font-bold text-slate-600" dir="rtl">
+                  عرض <span className="text-indigo-600">{((page - 1) * pageSize) + 1}</span> إلى{' '}
+                  <span className="text-indigo-600">
                     {Math.min(page * pageSize, (submissions.totalItems || (submissions as any).TotalItems || 0))}
                   </span>{' '}
-                  من <span className="font-semibold">{submissions.totalItems || (submissions as any).TotalItems || 0}</span> نتيجة
+                  من <span className="text-indigo-600">{submissions.totalItems || (submissions as any).TotalItems || 0}</span> نتيجة
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage(page - 1)}
                     disabled={!(submissions.hasPreviousPage || (submissions as any).HasPreviousPage)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 text-sm font-semibold text-black"
+                    className="px-3 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 text-[13px] font-bold text-slate-700 shadow-sm"
                     dir="rtl"
                   >
-                    <ChevronRight size={16} />
+                    <ChevronRight size={16} strokeWidth={2.5} />
                     السابق
                   </button>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     {Array.from({ length: Math.min(5, (submissions.totalPages || (submissions as any).TotalPages || 0)) }, (_, i) => {
                       const pageNum = i + 1
                       return (
                         <button
                           key={pageNum}
                           onClick={() => setPage(pageNum)}
-                          className={`px-3 py-2 rounded-lg transition-colors text-sm font-semibold ${page === pageNum
-                            ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 hover:bg-gray-50 text-black'
+                          className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors text-[14px] font-bold shadow-sm border ${page === pageNum
+                            ? 'bg-gradient-to-r from-indigo-600 to-blue-500 text-white border-transparent'
+                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
                             }`}
                         >
                           {pageNum}
@@ -909,11 +933,11 @@ function AdvancedSearchContent() {
                   <button
                     onClick={() => setPage(page + 1)}
                     disabled={!(submissions.hasNextPage || (submissions as any).HasNextPage)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 text-sm font-semibold text-black"
+                    className="px-3 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 text-[13px] font-bold text-slate-700 shadow-sm"
                     dir="rtl"
                   >
                     التالي
-                    <ChevronLeft size={16} />
+                    <ChevronLeft size={16} strokeWidth={2.5} />
                   </button>
                 </div>
               </div>
@@ -923,49 +947,54 @@ function AdvancedSearchContent() {
 
         {/* Empty State */}
         {!loading && !error && submissions && submissions.items.length === 0 && (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <FileText className="mx-auto text-gray-400 mb-6" size={64} />
-            <h3 className="text-2xl font-semibold text-gray-900 mb-3" dir="rtl">لا توجد إجابات</h3>
-            <p className="text-lg text-gray-600" dir="rtl">لم يتم العثور على أي إجابات لهذا النموذج</p>
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-16 text-center flex flex-col items-center">
+            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 ring-8 ring-slate-50/50">
+              <FileText className="text-slate-400" size={32} strokeWidth={2} />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-2" dir="rtl">لا توجد إجابات</h3>
+            <p className="text-[15px] font-medium text-slate-500 max-w-md" dir="rtl">لم يتم العثور على أي نتائج تطابق شروط البحث الحالية. يرجى محاولة تغيير الفلاتر للحصول على نتائج.</p>
           </div>
         )}
 
         {/* Submission Detail Modal */}
         {selectedSubmission && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" dir="rtl">
-            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-                <h3 className="text-2xl font-bold text-gray-900" dir="rtl">تفاصيل الوثيقة المؤرشفة</h3>
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300" dir="rtl">
+            <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] animate-in zoom-in-95 duration-300">
+              <div className="px-8 py-6 flex items-center justify-between border-b border-slate-100/50 bg-white relative">
+                <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-indigo-600 to-blue-500"></div>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight" dir="rtl">التفاصيل الكاملة للوثيقة</h3>
                 <button
                   onClick={() => setSelectedSubmission(null)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors text-2xl p-2"
+                  className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
                 >
-                  ✕
+                  <span className="text-xl leading-none">✕</span>
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+              <div className="p-8 overflow-y-auto">
                 {(() => {
                   const data = parseResponseData(selectedSubmission)
                   return (
                     <div className="space-y-8">
                       {/* Metadata Cards */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl">
-                          <p className="text-xs text-blue-600 mb-1 font-bold" dir="rtl">رقم الوثيقة</p>
-                          <p className="font-bold text-blue-900 text-lg" dir="rtl">
+                        <div className="bg-indigo-50 border border-indigo-100/50 p-5 rounded-2xl flex flex-col justify-center">
+                          <p className="text-[13px] text-indigo-600 mb-1 font-bold" dir="rtl">رقم الوثيقة</p>
+                          <p className="font-black text-indigo-950 text-xl" dir="rtl">
                               {data['system_documentNumber'] || data['document_number'] || 'غير متوفر'}
                           </p>
                         </div>
-                        <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl">
-                          <p className="text-xs text-gray-600 mb-1 font-bold" dir="rtl">الموظف المسؤول</p>
-                          <p className="font-semibold text-gray-900" dir="rtl">
+                        <div className="bg-slate-50 border border-slate-100 p-5 rounded-2xl flex flex-col justify-center">
+                          <p className="text-[13px] text-slate-500 mb-1 font-bold" dir="rtl">الموظف المسؤول</p>
+                          <p className="font-bold text-slate-900 text-lg flex items-center gap-2" dir="rtl">
+                              <User size={18} className="text-slate-400" />
                               {data['system_userName'] || data['user_name'] || selectedSubmission.submitterEmail || (selectedSubmission as any).SubmitterEmail}
                           </p>
                         </div>
-                        <div className="bg-gray-50 border border-gray-100 p-4 rounded-xl">
-                          <p className="text-xs text-gray-600 mb-1 font-bold" dir="rtl">تاريخ الأرشفة</p>
-                          <p className="font-semibold text-gray-900" dir="rtl">
+                        <div className="bg-slate-50 border border-slate-100 p-5 rounded-2xl flex flex-col justify-center">
+                          <p className="text-[13px] text-slate-500 mb-1 font-bold" dir="rtl">تاريخ الأرشفة</p>
+                          <p className="font-bold text-slate-900 text-lg flex items-center gap-2" dir="rtl">
+                              <Calendar size={18} className="text-slate-400" />
                               {data['system_entryDate'] || data['entry_date'] || formatDate(selectedSubmission.submittedAt || (selectedSubmission as any).SubmittedAt)}
                           </p>
                         </div>
@@ -973,9 +1002,11 @@ function AdvancedSearchContent() {
 
                       {/* System Attachments */}
                       {data['system_attachments'] && Array.isArray(data['system_attachments']) && data['system_attachments'].length > 0 && (
-                        <div className="bg-indigo-50/30 border border-indigo-100 p-5 rounded-xl">
-                          <h5 className="text-base font-bold text-indigo-900 mb-4 flex items-center gap-2">
-                            <Download size={20} className="text-indigo-600" />
+                        <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
+                          <h5 className="text-[16px] font-black text-slate-900 mb-4 flex items-center gap-2">
+                            <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-md">
+                              <Download size={18} strokeWidth={2.5} />
+                            </div>
                             الملفات المرفقة بالوثيقة ({data['system_attachments'].length})
                           </h5>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -983,46 +1014,48 @@ function AdvancedSearchContent() {
                               const fileName = attachmentDisplayName(url)
                               const needsAuth = isApiAttachmentDownloadUrl(url)
                               return (
-                                <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-lg border border-indigo-100 shadow-sm hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-2 overflow-hidden">
-                                      <FileText size={18} className="text-indigo-400 shrink-0" />
-                                      <span className="text-sm text-gray-700 truncate font-medium">{fileName}</span>
+                                <div key={idx} className="flex items-center justify-between bg-slate-50/50 p-3.5 rounded-xl border border-slate-200/60 hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors group">
+                                    <div className="flex items-center gap-3 overflow-hidden ml-2">
+                                      <div className="p-2 bg-white rounded-lg shadow-sm group-hover:scale-110 transition-transform">
+                                        <FileText size={18} strokeWidth={2} className="text-indigo-500" />
+                                      </div>
+                                      <span className="text-[14px] text-slate-700 truncate font-bold">{fileName}</span>
                                     </div>
-                                    <div className="flex gap-2 shrink-0">
+                                    <div className="flex gap-1.5 shrink-0">
                                         {needsAuth ? (
                                           <>
                                             <button
                                               type="button"
                                               title="عرض"
-                                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                              className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm"
                                               onClick={() => {
                                                 void openAttachmentInNewTabWithAuth(url, token).catch((e) =>
                                                   alert(e instanceof Error ? e.message : 'فشل العرض')
                                                 )
                                               }}
                                             >
-                                              <Eye size={18} />
+                                              <Eye size={16} strokeWidth={2.5} />
                                             </button>
                                             <button
                                               type="button"
                                               title="تحميل"
-                                              className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                                              className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm"
                                               onClick={() => {
                                                 void fetchAttachmentWithAuth(url, token)
                                                   .then(({ blob, filename }) => triggerBrowserDownload(blob, filename))
                                                   .catch((e) => alert(e instanceof Error ? e.message : 'فشل التحميل'))
                                               }}
                                             >
-                                              <Download size={18} />
+                                              <Download size={16} strokeWidth={2.5} />
                                             </button>
                                           </>
                                         ) : (
                                           <>
-                                            <a href={url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="عرض">
-                                                <Eye size={18} />
+                                            <a href={url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm" title="عرض">
+                                                <Eye size={16} strokeWidth={2.5} />
                                             </a>
-                                            <a href={url} download className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition-colors" title="تحميل">
-                                                <Download size={18} />
+                                            <a href={url} download className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm" title="تحميل">
+                                                <Download size={16} strokeWidth={2.5} />
                                             </a>
                                           </>
                                         )}
@@ -1036,26 +1069,28 @@ function AdvancedSearchContent() {
 
                       {/* Data Fields */}
                       <div>
-                        <h4 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2 border-b pb-2">
-                          <FileText size={20} className="text-blue-600" />
+                        <h4 className="text-[18px] font-black text-slate-900 mb-6 flex items-center gap-3">
+                          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                            <FileText size={20} strokeWidth={2.5} />
+                          </div>
                           بيانات النموذج المؤرشف
                         </h4>
 
                         {loadingForm ? (
-                          <div className="flex flex-col items-center justify-center py-12">
-                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-2"></div>
-                            <p className="text-sm text-gray-500">جاري تحميل حقول النموذج...</p>
+                          <div className="flex flex-col items-center justify-center py-16 bg-slate-50/50 rounded-2xl border border-slate-100">
+                            <div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+                            <p className="text-[14px] font-bold text-slate-500">جاري تحميل حقول النموذج...</p>
                           </div>
                         ) : formFields.length > 0 ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             {formFields.map((field) => {
                               const value = data[field.id]
                               return (
-                                <div key={field.id} className="bg-gray-50/50 p-4 rounded-lg border border-gray-100">
-                                  <label className="block text-sm font-bold text-gray-600 mb-2" dir="rtl">
+                                <div key={field.id} className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/60 hover:border-indigo-100 hover:bg-indigo-50/30 transition-colors">
+                                  <label className="block text-[13px] font-bold text-slate-500 mb-2" dir="rtl">
                                     {field.properties.label}
                                   </label>
-                                  <div className="text-gray-900 text-base" dir="rtl">
+                                  <div className="text-slate-900 text-[15px] font-bold break-words" dir="rtl">
                                     {renderFieldValue(field, value)}
                                   </div>
                                 </div>
@@ -1063,8 +1098,9 @@ function AdvancedSearchContent() {
                             })}
                           </div>
                         ) : (
-                          <div className="bg-gray-50 rounded-lg p-8 text-center border-2 border-dashed border-gray-200">
-                            <p className="text-gray-500" dir="rtl">لا توجد حقول إضافية لهذا التنسيق.</p>
+                          <div className="bg-slate-50/50 rounded-2xl p-12 text-center border border-dashed border-slate-300">
+                            <FileSpreadsheet size={40} className="mx-auto text-slate-300 mb-3" />
+                            <p className="text-[15px] font-bold text-slate-500" dir="rtl">لا توجد حقول إضافية لهذا التنسيق.</p>
                           </div>
                         )}
                       </div>
@@ -1073,13 +1109,13 @@ function AdvancedSearchContent() {
                 })()}
               </div>
 
-              <div className="px-6 py-4 border-t border-gray-200 flex justify-end bg-gray-50">
+              <div className="px-8 py-5 border-t border-slate-100 bg-white">
                 <button
                   onClick={() => setSelectedSubmission(null)}
-                  className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-lg font-bold shadow-sm"
+                  className="w-full sm:w-auto sm:mr-auto px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-blue-500 text-white font-bold rounded-xl hover:from-indigo-700 hover:to-blue-600 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
                   dir="rtl"
                 >
-                  إغلاق
+                  إغلاق التفاصيل
                 </button>
               </div>
             </div>
@@ -1098,8 +1134,8 @@ function AdvancedSearchContent() {
           />
         )}
       </div>
-    </div >
-  )
+    )
+
 }
 
 export default function AdvancedSearchPage() {
