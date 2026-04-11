@@ -1,0 +1,70 @@
+services:
+  archive-db:
+    image: postgres:15-alpine
+    container_name: archive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5436:5432"
+    volumes:
+      - archive_pg_data:/var/lib/postgresql/data
+    networks:
+      - archive_net
+
+  archive-api:
+    build:
+      context: ../../aspforms
+      dockerfile: Dockerfile.prod
+    container_name: archive-api
+    restart: unless-stopped
+    depends_on:
+      - archive-db
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=archive-db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      JwtSettings__SecretKey: ${JWT_SECRET}
+      JwtSettings__Issuer: ${JWT_ISSUER}
+      JwtSettings__Audience: ${JWT_AUDIENCE}
+      JwtSettings__ExpirationInMinutes: ${JWT_EXP_MIN}
+      JwtSettings__RefreshTokenExpirationInDays: ${JWT_REFRESH_DAYS}
+      AttachmentEncryption__KeyBase64: ${ATTACHMENT_ENCRYPTION_KEY_BASE64}
+    volumes:
+      - archive_uploads:/app/data/uploads_private
+    ports:
+      - "127.0.0.1:5060:5000"
+    networks:
+      - archive_net
+
+  archive-front:
+    build:
+      context: ../../forms_front
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.archive.hamaprov.net/api
+    container_name: archive-front
+    restart: unless-stopped
+    depends_on:
+      - archive-api
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://api.archive.hamaprov.net/api
+      ATTACHMENT_ENCRYPTION_KEY_BASE64: ${ATTACHMENT_ENCRYPTION_KEY_BASE64}
+    volumes:
+      - archive_uploads:/app/data/uploads_private
+    ports:
+      - "127.0.0.1:5160:5155"
+    networks:
+      - archive_net
+
+networks:
+  archive_net:
+    name: archive_net
+
+volumes:
+  archive_pg_data:
+    name: archive_pg_data
+  archive_uploads:
+    name: archive_uploads

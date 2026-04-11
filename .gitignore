@@ -1,0 +1,47 @@
+# IDEs
+.vs/
+.vscode/
+
+# Build artifacts
+bin/
+obj/
+dist/
+out/
+.next/
+
+# Dependencies
+node_modules/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Secrets and local env
+.env
+**/.env
+!.env.example
+!**/.env.example
+
+# Local dev keys / caches
+forms_front/.cache/
+*.tsbuildinfo
+
+# App config with secrets (copy from *.example)
+aspforms/appsettings.json
+aspforms/appsettings.Development.json
+aspforms/appsettings.Production.json
+aspforms/appsettings*.backup
+forms_front/.env.development
+forms_front/.env.local
+
+# DB dumps, exports, uploaded files
+*.sql
+aspforms/exports/
+forms_front/uploads/
