@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using FormsManagementApi.DTOs;
 using FormsManagementApi.Services;
@@ -27,6 +29,32 @@ public class FormSubmissionsController : ControllerBase
     }
 
     /// <summary>
+    /// For users who are not SuperAdmin / DepartmentAdmin: restrict listings to forms where they have
+    /// <c>search_inquiry</c> / read / write / admin (all submissions) or <c>archivist</c> (own submissions only).
+    /// </summary>
+    private async Task<SubmissionQueryContext?> ResolveSubmissionAccessAsync()
+    {
+        if (HttpContext.IsSuperAdmin() || HttpContext.IsDepartmentAdmin())
+            return null;
+
+        var deptId = HttpContext.GetDepartmentId();
+        var userId = HttpContext.GetUserId();
+        if (!deptId.HasValue || !userId.HasValue)
+        {
+            return new SubmissionQueryContext
+            {
+                UserId = Guid.Empty,
+                UserEmail = null,
+                FullAccessFormIds = new HashSet<Guid>(),
+                OwnSubmissionsOnlyFormIds = new HashSet<Guid>()
+            };
+        }
+
+        var email = HttpContext.User.FindFirst(ClaimTypes.Email)?.Value;
+        return await _formSubmissionService.BuildRestrictedSubmissionContextAsync(userId.Value, deptId.Value, email);
+    }
+
+    /// <summary>
     /// Retrieves all form submissions across all forms with department-based filtering.
     /// SuperAdmin can see all submissions, other users can only see submissions from their department.
     /// Supports search functionality and sorting by submission date, form name, or submitter email.
@@ -52,7 +80,8 @@ public class FormSubmissionsController : ControllerBase
             }
         }
 
-        var result = await _formSubmissionService.GetAllSubmissionsAsync(pagination, departmentId, formId);
+        var access = await ResolveSubmissionAccessAsync();
+        var result = await _formSubmissionService.GetAllSubmissionsAsync(pagination, departmentId, formId, access);
         
         if (!result.Success)
         {
@@ -84,7 +113,8 @@ public class FormSubmissionsController : ControllerBase
             }
         }
 
-        var result = await _formSubmissionService.AdvancedSearchAsync(searchDto, departmentId);
+        var access = await ResolveSubmissionAccessAsync();
+        var result = await _formSubmissionService.AdvancedSearchAsync(searchDto, departmentId, access);
         
         if (!result.Success)
         {
@@ -106,7 +136,8 @@ public class FormSubmissionsController : ControllerBase
         Guid formId, 
         [FromQuery] PaginationDto pagination)
     {
-        var result = await _formSubmissionService.GetFormSubmissionsAsync(formId, pagination);
+        var access = await ResolveSubmissionAccessAsync();
+        var result = await _formSubmissionService.GetFormSubmissionsAsync(formId, pagination, access);
         
         if (!result.Success)
         {
@@ -124,10 +155,15 @@ public class FormSubmissionsController : ControllerBase
     [HttpGet("{submissionId}")]
     public async Task<ActionResult<ApiResponse<FormSubmissionDto>>> GetFormSubmission(Guid submissionId)
     {
-        var result = await _formSubmissionService.GetFormSubmissionByIdAsync(submissionId);
+        var access = await ResolveSubmissionAccessAsync();
+        var result = await _formSubmissionService.GetFormSubmissionByIdAsync(submissionId, access);
         
         if (!result.Success)
         {
+            if (result.Message?.Contains("Access denied", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, result);
+            }
             return NotFound(result);
         }
 
@@ -147,16 +183,7 @@ public class FormSubmissionsController : ControllerBase
         Guid formId, 
         [FromBody] CreateFormSubmissionDto createSubmissionDto)
     {
-        // Get user ID if authenticated
-        Guid? userId = null;
-        if (HttpContext.User.Identity?.IsAuthenticated == true)
-        {
-            var userIdClaim = HttpContext.User.FindFirst("UserId");
-            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var parsedUserId))
-            {
-                userId = parsedUserId;
-            }
-        }
+        Guid? userId = HttpContext.User.Identity?.IsAuthenticated == true ? HttpContext.GetUserId() : null;
 
         // Set IP address
         createSubmissionDto.SubmitterIp = HttpContext.Connection.RemoteIpAddress?.ToString();
@@ -186,16 +213,7 @@ public class FormSubmissionsController : ControllerBase
     {
         try
         {
-            // Get user ID if authenticated
-            Guid? userId = null;
-            if (HttpContext.User.Identity?.IsAuthenticated == true)
-            {
-                var userIdClaim = HttpContext.User.FindFirst("UserId");
-                if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var parsedUserId))
-                {
-                    userId = parsedUserId;
-                }
-            }
+            Guid? userId = HttpContext.User.Identity?.IsAuthenticated == true ? HttpContext.GetUserId() : null;
 
             // Set IP address
             createSubmissionDto.SubmitterIp = HttpContext.Connection.RemoteIpAddress?.ToString();
@@ -248,7 +266,8 @@ public class FormSubmissionsController : ControllerBase
         int versionNumber, 
         [FromQuery] PaginationDto pagination)
     {
-        var result = await _formSubmissionService.GetFormSubmissionsByVersionAsync(formId, versionNumber, pagination);
+        var access = await ResolveSubmissionAccessAsync();
+        var result = await _formSubmissionService.GetFormSubmissionsByVersionAsync(formId, versionNumber, pagination, access);
         
         if (!result.Success)
         {
@@ -273,16 +292,7 @@ public class FormSubmissionsController : ControllerBase
         int versionNumber, 
         [FromBody] CreateFormSubmissionDto createSubmissionDto)
     {
-        // Get user ID if authenticated
-        Guid? userId = null;
-        if (HttpContext.User.Identity?.IsAuthenticated == true)
-        {
-            var userIdClaim = HttpContext.User.FindFirst("UserId");
-            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var parsedUserId))
-            {
-                userId = parsedUserId;
-            }
-        }
+        Guid? userId = HttpContext.User.Identity?.IsAuthenticated == true ? HttpContext.GetUserId() : null;
 
         // Set IP address
         createSubmissionDto.SubmitterIp = HttpContext.Connection.RemoteIpAddress?.ToString();
@@ -310,16 +320,7 @@ public class FormSubmissionsController : ControllerBase
         Guid formId, 
         [FromBody] CreateFormSubmissionDto createSubmissionDto)
     {
-        // Get user ID if authenticated
-        Guid? userId = null;
-        if (HttpContext.User.Identity?.IsAuthenticated == true)
-        {
-            var userIdClaim = HttpContext.User.FindFirst("UserId");
-            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var parsedUserId))
-            {
-                userId = parsedUserId;
-            }
-        }
+        Guid? userId = HttpContext.User.Identity?.IsAuthenticated == true ? HttpContext.GetUserId() : null;
 
         // Set IP address
         createSubmissionDto.SubmitterIp = HttpContext.Connection.RemoteIpAddress?.ToString();
@@ -448,7 +449,8 @@ public class FormSubmissionsController : ControllerBase
     [HttpGet("form/{formId}/analytics/version-counts")]
     public async Task<ActionResult<ApiResponse<Dictionary<int, int>>>> GetSubmissionCountByVersion(Guid formId)
     {
-        var result = await _formSubmissionService.GetSubmissionCountByVersionAsync(formId);
+        var access = await ResolveSubmissionAccessAsync();
+        var result = await _formSubmissionService.GetSubmissionCountByVersionAsync(formId, access);
         
         if (!result.Success)
         {
@@ -473,7 +475,8 @@ public class FormSubmissionsController : ControllerBase
         // Limit the count to prevent excessive data retrieval
         count = Math.Min(Math.Max(count, 1), 100);
 
-        var result = await _formSubmissionService.GetRecentSubmissionsAsync(formId, count);
+        var access = await ResolveSubmissionAccessAsync();
+        var result = await _formSubmissionService.GetRecentSubmissionsAsync(formId, count, access);
         
         if (!result.Success)
         {
@@ -511,14 +514,20 @@ public class FormSubmissionsController : ControllerBase
 
         try
         {
+            var access = await ResolveSubmissionAccessAsync();
+
             // First, get the form to check if it exists and verify access
-            var formResult = await _formSubmissionService.GetFormSubmissionsAsync(request.FormId, new PaginationDto { Page = 1, PageSize = 1 });
+            var formResult = await _formSubmissionService.GetFormSubmissionsAsync(request.FormId, new PaginationDto { Page = 1, PageSize = 1 }, access);
             
             if (!formResult.Success)
             {
                 if (formResult.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
                 {
                     return NotFound(ApiResponse<ExportDataDto>.ErrorResponse("Form not found"));
+                }
+                if (formResult.Message.Contains("Access denied", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Forbid(formResult.Message);
                 }
                 return BadRequest(ApiResponse<ExportDataDto>.ErrorResponse("Unable to access form"));
             }
@@ -531,10 +540,6 @@ public class FormSubmissionsController : ControllerBase
                 {
                     return Forbid("You must be associated with a department to export form data.");
                 }
-
-                // Note: We would need to verify the form's department here, but since we don't have 
-                // direct access to form details in this method, we rely on the service layer
-                // to enforce department-based filtering in GetFormSubmissionsForExportAsync
             }
 
             // Get export data
@@ -542,7 +547,8 @@ public class FormSubmissionsController : ControllerBase
                 request.FormId, 
                 request.Filters, 
                 request.SelectedFields, 
-                request.IncludeMetadata);
+                request.IncludeMetadata,
+                access);
 
             if (!result.Success)
             {
@@ -585,8 +591,9 @@ public class FormSubmissionsController : ControllerBase
     {
         try
         {
+            var access = await ResolveSubmissionAccessAsync();
             // Check if form exists and user has access by attempting to get form submissions
-            var accessCheck = await _formSubmissionService.GetFormSubmissionsAsync(formId, new PaginationDto { Page = 1, PageSize = 1 });
+            var accessCheck = await _formSubmissionService.GetFormSubmissionsAsync(formId, new PaginationDto { Page = 1, PageSize = 1 }, access);
             
             if (!accessCheck.Success)
             {

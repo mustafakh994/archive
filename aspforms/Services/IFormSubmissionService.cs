@@ -11,16 +11,19 @@ public interface IFormSubmissionService
 {
     // Form submission CRUD operations
     /// <summary>Retrieves all form submissions across all forms with optional department and form filtering.</summary>
-    Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetAllSubmissionsAsync(PaginationDto pagination, Guid? departmentId = null, Guid? formId = null);
+    Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetAllSubmissionsAsync(PaginationDto pagination, Guid? departmentId = null, Guid? formId = null, SubmissionQueryContext? accessContext = null);
     
     /// <summary>Performs an advanced search on form submissions with multiple filters.</summary>
-    Task<ApiResponse<PagedResult<FormSubmissionDto>>> AdvancedSearchAsync(AdvancedSearchDto searchDto, Guid? departmentId = null);
+    Task<ApiResponse<PagedResult<FormSubmissionDto>>> AdvancedSearchAsync(AdvancedSearchDto searchDto, Guid? departmentId = null, SubmissionQueryContext? accessContext = null);
     
     /// <summary>Retrieves a paginated list of form submissions for a specific form with search and sorting capabilities.</summary>
-    Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetFormSubmissionsAsync(Guid formId, PaginationDto pagination);
+    Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetFormSubmissionsAsync(Guid formId, PaginationDto pagination, SubmissionQueryContext? accessContext = null);
     
     /// <summary>Retrieves a specific form submission by its unique identifier.</summary>
-    Task<ApiResponse<FormSubmissionDto>> GetFormSubmissionByIdAsync(Guid submissionId);
+    Task<ApiResponse<FormSubmissionDto>> GetFormSubmissionByIdAsync(Guid submissionId, SubmissionQueryContext? accessContext = null);
+
+    /// <summary>Form-level permissions (search_inquiry / archivist) for the current user within a department.</summary>
+    Task<SubmissionQueryContext> BuildRestrictedSubmissionContextAsync(Guid userId, Guid departmentId, string? userEmail);
     
     /// <summary>Creates a new form submission using specified or default version.</summary>
     Task<ApiResponse<FormSubmissionDto>> CreateFormSubmissionAsync(Guid formId, CreateFormSubmissionDto createSubmissionDto, Guid? userId = null);
@@ -33,7 +36,7 @@ public interface IFormSubmissionService
     
     // Version-specific operations
     /// <summary>Retrieves form submissions filtered by a specific schema version.</summary>
-    Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetFormSubmissionsByVersionAsync(Guid formId, int versionNumber, PaginationDto pagination);
+    Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetFormSubmissionsByVersionAsync(Guid formId, int versionNumber, PaginationDto pagination, SubmissionQueryContext? accessContext = null);
     
     /// <summary>Creates a form submission using a specific schema version.</summary>
     Task<ApiResponse<FormSubmissionDto>> CreateFormSubmissionWithVersionAsync(Guid formId, int versionNumber, CreateFormSubmissionDto createSubmissionDto, Guid? userId = null);
@@ -60,14 +63,14 @@ public interface IFormSubmissionService
     
     // Analytics and reporting
     /// <summary>Retrieves submission counts grouped by schema version.</summary>
-    Task<ApiResponse<Dictionary<int, int>>> GetSubmissionCountByVersionAsync(Guid formId);
+    Task<ApiResponse<Dictionary<int, int>>> GetSubmissionCountByVersionAsync(Guid formId, SubmissionQueryContext? accessContext = null);
     
     /// <summary>Retrieves the most recent form submissions for a form.</summary>
-    Task<ApiResponse<List<FormSubmissionDto>>> GetRecentSubmissionsAsync(Guid formId, int count = 10);
+    Task<ApiResponse<List<FormSubmissionDto>>> GetRecentSubmissionsAsync(Guid formId, int count = 10, SubmissionQueryContext? accessContext = null);
     
     // Export operations
     /// <summary>Retrieves form submissions for export with filtering and transformation.</summary>
-    Task<ApiResponse<ExportDataDto>> GetFormSubmissionsForExportAsync(Guid formId, ExportFilterDto filters, List<string> selectedFields, ExportMetadataDto metadata);
+    Task<ApiResponse<ExportDataDto>> GetFormSubmissionsForExportAsync(Guid formId, ExportFilterDto filters, List<string> selectedFields, ExportMetadataDto metadata, SubmissionQueryContext? accessContext = null);
     
     /// <summary>Retrieves form field definitions for export configuration.</summary>
     Task<ApiResponse<FormFieldDefinitionDto[]>> GetFormFieldDefinitionsAsync(Guid formId);

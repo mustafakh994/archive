@@ -24,6 +24,9 @@ public class FormSubmission
     [MaxLength(255)]
     [EmailAddress]
     public string? SubmitterEmail { get; set; }
+
+    /// <summary>Authenticated user who created the submission (for per-form archivist visibility).</summary>
+    public Guid? SubmittedByUserId { get; set; }
     
     [Required]
     public DateTimeOffset SubmittedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -31,4 +34,7 @@ public class FormSubmission
     // Navigation properties
     [ForeignKey("FormId")]
     public virtual Form Form { get; set; } = null!;
+
+    [ForeignKey("SubmittedByUserId")]
+    public virtual User? SubmittedByUser { get; set; }
 }

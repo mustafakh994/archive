@@ -495,6 +495,7 @@ public class FormService : IFormService
 
             var submission = _mapper.Map<FormSubmission>(createSubmissionDto);
             submission.FormId = formId;
+            submission.SubmittedByUserId = userId;
 
             _context.FormSubmissions.Add(submission);
             await _context.SaveChangesAsync();
@@ -554,6 +555,7 @@ public class FormService : IFormService
                 FormVersion = createSubmissionDto.FormVersion,
                 SubmitterIp = !string.IsNullOrEmpty(createSubmissionDto.SubmitterIp) && System.Net.IPAddress.TryParse(createSubmissionDto.SubmitterIp, out var ip) ? ip : null,
                 SubmitterEmail = createSubmissionDto.SubmitterEmail,
+                SubmittedByUserId = userId,
                 SubmittedAt = DateTimeOffset.UtcNow
             };
 
@@ -708,6 +710,19 @@ public class FormService : IFormService
     {
         try
         {
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "read", "write", "admin", "search_inquiry", "archivist"
+            };
+            if (string.IsNullOrWhiteSpace(createPermissionDto.Permission) ||
+                !allowed.Contains(createPermissionDto.Permission.Trim()))
+            {
+                return ApiResponse<FormPermissionDto>.ErrorResponse(
+                    "Invalid permission. Allowed: read, write, admin, search_inquiry (بحث واستعلام), archivist (مؤرشف).");
+            }
+
+            createPermissionDto.Permission = createPermissionDto.Permission.Trim().ToLowerInvariant();
+
             var form = await _context.Forms.FindAsync(formId);
             if (form == null)
             {

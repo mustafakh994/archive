@@ -61,4 +61,43 @@ body {
   .rtl-space-x-reverse > :not([hidden]) ~ :not([hidden]) {
     --tw-space-x-reverse: 1;
   }
-} 
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+  #archive-qr-print-root,
+  #archive-qr-print-root * {
+    visibility: visible;
+  }
+  #archive-qr-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    box-shadow: none;
+    min-height: 100vh; /* center QR on the printed sheet */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Physical size on paper: 8 cm × 8 cm (QR only; no extra labels) */
+  #archive-qr-print-root .archive-qr-print-target img {
+    width: 8cm !important;
+    height: 8cm !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: contain;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+}

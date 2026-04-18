@@ -145,6 +145,7 @@ public class FormSubmissionDto
     public int? FormVersion { get; set; }
     public string? SubmitterIp { get; set; }
     public string? SubmitterEmail { get; set; }
+    public Guid? SubmittedByUserId { get; set; }
     public DateTimeOffset SubmittedAt { get; set; }
     public string? FormName { get; set; }
 }

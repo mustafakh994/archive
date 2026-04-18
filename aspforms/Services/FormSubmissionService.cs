@@ -39,7 +39,7 @@ public class FormSubmissionService : IFormSubmissionService
     /// <param name="formId">Optional form ID to filter submissions for a specific form.</param>
     /// <returns>An ApiResponse containing a paginated result of FormSubmissionDto objects.</returns>
     /// <exception cref="Exception">Thrown when an error occurs during data retrieval.</exception>
-    public async Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetAllSubmissionsAsync(PaginationDto pagination, Guid? departmentId = null, Guid? formId = null)
+    public async Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetAllSubmissionsAsync(PaginationDto pagination, Guid? departmentId = null, Guid? formId = null, SubmissionQueryContext? accessContext = null)
     {
         try
         {
@@ -59,6 +59,8 @@ public class FormSubmissionService : IFormSubmissionService
             {
                 query = query.Where(fs => fs.FormId == formId.Value);
             }
+
+            query = ApplySubmissionAccessFilter(query, accessContext);
 
             // Apply search filter
             if (!string.IsNullOrEmpty(pagination.Search))
@@ -133,7 +135,7 @@ public class FormSubmissionService : IFormSubmissionService
     /// Performs an advanced search on form submissions with multiple filters.
     /// Supports filtering by FormTemplate, Department, Date Range, and Dynamic Text inside JSON Data.
     /// </summary>
-    public async Task<ApiResponse<PagedResult<FormSubmissionDto>>> AdvancedSearchAsync(AdvancedSearchDto searchDto, Guid? departmentId = null)
+    public async Task<ApiResponse<PagedResult<FormSubmissionDto>>> AdvancedSearchAsync(AdvancedSearchDto searchDto, Guid? departmentId = null, SubmissionQueryContext? accessContext = null)
     {
         try
         {
@@ -147,6 +149,8 @@ public class FormSubmissionService : IFormSubmissionService
             {
                 query = query.Where(fs => fs.Form.DepartmentId == departmentId.Value);
             }
+
+            query = ApplySubmissionAccessFilter(query, accessContext);
             
             // Filter by specific department requested in search
             if (searchDto.DepartmentId.HasValue && (!departmentId.HasValue || searchDto.DepartmentId.Value == departmentId.Value))
@@ -257,7 +261,7 @@ public class FormSubmissionService : IFormSubmissionService
     /// <param name="pagination">Pagination parameters including page number, page size, search term, and sorting options.</param>
     /// <returns>An ApiResponse containing a paginated result of FormSubmissionDto objects.</returns>
     /// <exception cref="Exception">Thrown when an error occurs during data retrieval.</exception>
-    public async Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetFormSubmissionsAsync(Guid formId, PaginationDto pagination)
+    public async Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetFormSubmissionsAsync(Guid formId, PaginationDto pagination, SubmissionQueryContext? accessContext = null)
     {
         try
         {
@@ -268,10 +272,17 @@ public class FormSubmissionService : IFormSubmissionService
                 return ApiResponse<PagedResult<FormSubmissionDto>>.ErrorResponse("Form not found.");
             }
 
+            if (accessContext != null && (!accessContext.CanAccessForm(formId) || accessContext.IsDenyAll))
+            {
+                return ApiResponse<PagedResult<FormSubmissionDto>>.ErrorResponse("Access denied to this form.");
+            }
+
             var query = _context.FormSubmissions
                 .Include(fs => fs.Form)
                 .Where(fs => fs.FormId == formId)
                 .AsQueryable();
+
+            query = ApplySubmissionAccessFilter(query, accessContext);
 
             // Apply search filter
             if (!string.IsNullOrEmpty(pagination.Search))
@@ -334,7 +345,7 @@ public class FormSubmissionService : IFormSubmissionService
     /// <param name="submissionId">The unique identifier of the form submission.</param>
     /// <returns>An ApiResponse containing the FormSubmissionDto if found, or an error message if not found.</returns>
     /// <exception cref="Exception">Thrown when an error occurs during data retrieval.</exception>
-    public async Task<ApiResponse<FormSubmissionDto>> GetFormSubmissionByIdAsync(Guid submissionId)
+    public async Task<ApiResponse<FormSubmissionDto>> GetFormSubmissionByIdAsync(Guid submissionId, SubmissionQueryContext? accessContext = null)
     {
         try
         {
@@ -345,6 +356,11 @@ public class FormSubmissionService : IFormSubmissionService
             if (submission == null)
             {
                 return ApiResponse<FormSubmissionDto>.ErrorResponse("Form submission not found.");
+            }
+
+            if (!SubmissionMatchesAccess(submission, accessContext))
+            {
+                return ApiResponse<FormSubmissionDto>.ErrorResponse("Access denied.");
             }
 
             var submissionDto = _mapper.Map<FormSubmissionDto>(submission);
@@ -413,6 +429,7 @@ public class FormSubmissionService : IFormSubmissionService
                 FormVersion = versionToUse,
                 SubmitterIp = submitterIp,
                 SubmitterEmail = createSubmissionDto.SubmitterEmail,
+                SubmittedByUserId = userId,
                 SubmittedAt = DateTimeOffset.UtcNow
             };
 
@@ -506,6 +523,7 @@ public class FormSubmissionService : IFormSubmissionService
                 FormVersion = versionToUse,
                 SubmitterIp = submitterIp,
                 SubmitterEmail = createSubmissionDto.SubmitterEmail,
+                SubmittedByUserId = userId,
                 SubmittedAt = DateTimeOffset.UtcNow
             };
 
@@ -648,7 +666,7 @@ public class FormSubmissionService : IFormSubmissionService
     /// <param name="pagination">Pagination parameters including page number, page size, search term, and sorting options.</param>
     /// <returns>An ApiResponse containing a paginated result of FormSubmissionDto objects for the specified version.</returns>
     /// <exception cref="Exception">Thrown when an error occurs during data retrieval.</exception>
-    public async Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetFormSubmissionsByVersionAsync(Guid formId, int versionNumber, PaginationDto pagination)
+    public async Task<ApiResponse<PagedResult<FormSubmissionDto>>> GetFormSubmissionsByVersionAsync(Guid formId, int versionNumber, PaginationDto pagination, SubmissionQueryContext? accessContext = null)
     {
         try
         {
@@ -666,10 +684,17 @@ public class FormSubmissionService : IFormSubmissionService
                 return ApiResponse<PagedResult<FormSubmissionDto>>.ErrorResponse($"Form schema version {versionNumber} not found.");
             }
 
+            if (accessContext != null && (!accessContext.CanAccessForm(formId) || accessContext.IsDenyAll))
+            {
+                return ApiResponse<PagedResult<FormSubmissionDto>>.ErrorResponse("Access denied to this form.");
+            }
+
             var query = _context.FormSubmissions
                 .Include(fs => fs.Form)
                 .Where(fs => fs.FormId == formId && fs.FormVersion == versionNumber)
                 .AsQueryable();
+
+            query = ApplySubmissionAccessFilter(query, accessContext);
 
             // Apply search filter
             if (!string.IsNullOrEmpty(pagination.Search))
@@ -752,6 +777,7 @@ public class FormSubmissionService : IFormSubmissionService
                 FormVersion = versionNumber,
                 SubmitterIp = submitterIp,
                 SubmitterEmail = createSubmissionDto.SubmitterEmail,
+                SubmittedByUserId = userId,
                 SubmittedAt = DateTimeOffset.UtcNow
             };
 
@@ -825,6 +851,7 @@ public class FormSubmissionService : IFormSubmissionService
                 FormVersion = latestSchemaVersion.VersionNumber,
                 SubmitterIp = submitterIp,
                 SubmitterEmail = createSubmissionDto.SubmitterEmail,
+                SubmittedByUserId = userId,
                 SubmittedAt = DateTimeOffset.UtcNow
             };
 
@@ -1014,7 +1041,7 @@ public class FormSubmissionService : IFormSubmissionService
     /// <param name="formId">The unique identifier of the form.</param>
     /// <returns>An ApiResponse containing a dictionary with version numbers as keys and submission counts as values.</returns>
     /// <exception cref="Exception">Thrown when an error occurs during data retrieval.</exception>
-    public async Task<ApiResponse<Dictionary<int, int>>> GetSubmissionCountByVersionAsync(Guid formId)
+    public async Task<ApiResponse<Dictionary<int, int>>> GetSubmissionCountByVersionAsync(Guid formId, SubmissionQueryContext? accessContext = null)
     {
         try
         {
@@ -1024,8 +1051,16 @@ public class FormSubmissionService : IFormSubmissionService
                 return ApiResponse<Dictionary<int, int>>.ErrorResponse("Form not found.");
             }
 
-            var submissionCounts = await _context.FormSubmissions
-                .Where(fs => fs.FormId == formId && fs.FormVersion.HasValue)
+            if (accessContext != null && (!accessContext.CanAccessForm(formId) || accessContext.IsDenyAll))
+            {
+                return ApiResponse<Dictionary<int, int>>.ErrorResponse("Access denied to this form.");
+            }
+
+            var countQuery = _context.FormSubmissions
+                .Where(fs => fs.FormId == formId && fs.FormVersion.HasValue);
+            countQuery = ApplySubmissionAccessFilter(countQuery, accessContext);
+
+            var submissionCounts = await countQuery
                 .GroupBy(fs => fs.FormVersion!.Value)
                 .Select(g => new { Version = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.Version, x => x.Count);
@@ -1046,7 +1081,7 @@ public class FormSubmissionService : IFormSubmissionService
     /// <param name="count">The maximum number of recent submissions to retrieve (default: 10).</param>
     /// <returns>An ApiResponse containing a list of FormSubmissionDto objects representing the most recent submissions.</returns>
     /// <exception cref="Exception">Thrown when an error occurs during data retrieval.</exception>
-    public async Task<ApiResponse<List<FormSubmissionDto>>> GetRecentSubmissionsAsync(Guid formId, int count = 10)
+    public async Task<ApiResponse<List<FormSubmissionDto>>> GetRecentSubmissionsAsync(Guid formId, int count = 10, SubmissionQueryContext? accessContext = null)
     {
         try
         {
@@ -1056,9 +1091,17 @@ public class FormSubmissionService : IFormSubmissionService
                 return ApiResponse<List<FormSubmissionDto>>.ErrorResponse("Form not found.");
             }
 
-            var recentSubmissions = await _context.FormSubmissions
+            if (accessContext != null && (!accessContext.CanAccessForm(formId) || accessContext.IsDenyAll))
+            {
+                return ApiResponse<List<FormSubmissionDto>>.ErrorResponse("Access denied to this form.");
+            }
+
+            var q = _context.FormSubmissions
                 .Include(fs => fs.Form)
-                .Where(fs => fs.FormId == formId)
+                .Where(fs => fs.FormId == formId);
+            q = ApplySubmissionAccessFilter(q, accessContext);
+
+            var recentSubmissions = await q
                 .OrderByDescending(fs => fs.SubmittedAt)
                 .Take(count)
                 .ToListAsync();
@@ -1081,7 +1124,7 @@ public class FormSubmissionService : IFormSubmissionService
     /// <param name="selectedFields">List of field IDs to include in export.</param>
     /// <param name="metadata">Metadata inclusion options.</param>
     /// <returns>An ApiResponse containing export data with pagination metadata.</returns>
-    public async Task<ApiResponse<ExportDataDto>> GetFormSubmissionsForExportAsync(Guid formId, ExportFilterDto filters, List<string> selectedFields, ExportMetadataDto metadata)
+    public async Task<ApiResponse<ExportDataDto>> GetFormSubmissionsForExportAsync(Guid formId, ExportFilterDto filters, List<string> selectedFields, ExportMetadataDto metadata, SubmissionQueryContext? accessContext = null)
     {
         try
         {
@@ -1099,10 +1142,17 @@ public class FormSubmissionService : IFormSubmissionService
                 return ApiResponse<ExportDataDto>.ErrorResponse("Form not found.");
             }
 
+            if (accessContext != null && (!accessContext.CanAccessForm(formId) || accessContext.IsDenyAll))
+            {
+                return ApiResponse<ExportDataDto>.ErrorResponse("Access denied to this form.");
+            }
+
             // Build query with filters
             var query = _context.FormSubmissions
                 .Include(fs => fs.Form)
                 .Where(fs => fs.FormId == formId);
+
+            query = ApplySubmissionAccessFilter(query, accessContext);
 
             // Apply date range filters
             if (filters.StartDate.HasValue)
@@ -1178,6 +1228,75 @@ public class FormSubmissionService : IFormSubmissionService
         // Placeholder implementation - will be completed in task 4
         await Task.Delay(1); // Prevent compiler warning
         return ApiResponse<FormFieldDefinitionDto[]>.ErrorResponse("Field definitions functionality is not yet implemented. Please complete task 4 first.");
+    }
+
+    public async Task<SubmissionQueryContext> BuildRestrictedSubmissionContextAsync(Guid userId, Guid departmentId, string? userEmail)
+    {
+        var rows = await (
+            from fp in _context.FormPermissions.AsNoTracking()
+            join f in _context.Forms.AsNoTracking() on fp.FormId equals f.Id
+            where fp.UserId == userId && f.DepartmentId == departmentId
+            select new { fp.FormId, fp.Permission }
+        ).ToListAsync();
+
+        static bool IsFullViewPermission(string p) =>
+            p.Equals("read", StringComparison.OrdinalIgnoreCase) ||
+            p.Equals("write", StringComparison.OrdinalIgnoreCase) ||
+            p.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
+            p.Equals("search_inquiry", StringComparison.OrdinalIgnoreCase);
+
+        static bool IsArchivist(string p) =>
+            p.Equals("archivist", StringComparison.OrdinalIgnoreCase);
+
+        var full = new HashSet<Guid>();
+        var own = new HashSet<Guid>();
+
+        foreach (var g in rows.GroupBy(r => r.FormId))
+        {
+            var perms = g.Select(x => x.Permission).ToList();
+            if (perms.Any(IsFullViewPermission))
+                full.Add(g.Key);
+            else if (perms.Any(IsArchivist))
+                own.Add(g.Key);
+        }
+
+        return new SubmissionQueryContext
+        {
+            UserId = userId,
+            UserEmail = userEmail,
+            FullAccessFormIds = full,
+            OwnSubmissionsOnlyFormIds = own
+        };
+    }
+
+    private static IQueryable<FormSubmission> ApplySubmissionAccessFilter(IQueryable<FormSubmission> query, SubmissionQueryContext? access)
+    {
+        if (access == null) return query;
+        if (access.IsDenyAll) return query.Where(_ => false);
+
+        return query.Where(fs =>
+            access.FullAccessFormIds.Contains(fs.FormId) ||
+            (access.OwnSubmissionsOnlyFormIds.Contains(fs.FormId) && (
+                fs.SubmittedByUserId == access.UserId ||
+                (fs.SubmittedByUserId == null && access.UserEmail != null && fs.SubmitterEmail != null &&
+                 fs.SubmitterEmail.ToLower() == access.UserEmail.ToLower())
+            )));
+    }
+
+    private static bool SubmissionMatchesAccess(FormSubmission fs, SubmissionQueryContext? access)
+    {
+        if (access == null) return true;
+        if (access.IsDenyAll) return false;
+        if (access.FullAccessFormIds.Contains(fs.FormId)) return true;
+        if (access.OwnSubmissionsOnlyFormIds.Contains(fs.FormId))
+        {
+            if (fs.SubmittedByUserId == access.UserId) return true;
+            if (fs.SubmittedByUserId == null && !string.IsNullOrEmpty(access.UserEmail) && fs.SubmitterEmail != null &&
+                string.Equals(fs.SubmitterEmail, access.UserEmail, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -161,6 +161,11 @@ public class ApplicationDbContext : DbContext
                 .WithMany(e => e.FormSubmissions)
                 .HasForeignKey(e => e.FormId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.SubmittedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.SubmittedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // UsageMetric configuration
@@ -241,7 +246,7 @@ public class ApplicationDbContext : DbContext
         // FormPermission configuration
         modelBuilder.Entity<FormPermission>(entity =>
         {
-            entity.HasIndex(e => new { e.FormId, e.UserId }).IsUnique();
+            entity.HasIndex(e => new { e.FormId, e.UserId, e.Permission }).IsUnique();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
             

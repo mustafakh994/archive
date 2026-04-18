@@ -12,7 +12,8 @@ import {
   Calendar,
   Mail,
   FileText,
-  User
+  User,
+  Printer
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
@@ -22,6 +23,8 @@ import {
   triggerBrowserDownload,
   openAttachmentInNewTabWithAuth,
 } from '@/lib/attachment-download-client'
+import { buildArchiveDocumentPlainText, extractArchiveDisplayFields } from '@/lib/archive-document-fields'
+import { ARCHIVE_QR_PRINT_PIXEL_SIZE, getArchiveQrImageUrl } from '@/lib/archive-document-qr'
 
 // Location Display Component for reverse geocoding
 interface LocationDisplayProps {
@@ -291,6 +294,12 @@ export default function SubmissionsPage() {
   const [loadingForms, setLoadingForms] = useState(false)
   const [loadingEmails, setLoadingEmails] = useState(false)
   const [loadingDepartments, setLoadingDepartments] = useState(false)
+
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [qrModalLoading, setQrModalLoading] = useState(false)
+  const [qrEncodedPayload, setQrEncodedPayload] = useState('')
+  const [qrPlainText, setQrPlainText] = useState('')
+  const [qrUsesPublicLink, setQrUsesPublicLink] = useState(false)
 
   // Helper to safely parse responseData
   const parseResponseData = (submission: any): Record<string, any> => {
@@ -600,6 +609,45 @@ export default function SubmissionsPage() {
     setSelectedSubmission(submission)
     setFormFields([])
     fetchFormSchema(submission.formId)
+  }
+
+  const openQrPrintModal = async (submission: Submission) => {
+    const row = submission as unknown as Record<string, unknown>
+    const fields = extractArchiveDisplayFields(row)
+    const plain = buildArchiveDocumentPlainText(fields)
+    setQrPlainText(plain)
+    setQrEncodedPayload('')
+    setQrUsesPublicLink(false)
+    setQrModalOpen(true)
+    setQrModalLoading(true)
+
+    if (!token) {
+      setQrEncodedPayload(plain)
+      setQrModalLoading(false)
+      return
+    }
+
+    try {
+      const res = await fetch('/api/archive-doc-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ submissionId: submission.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data?.success && typeof data.publicUrl === 'string' && data.publicUrl.length > 0) {
+        setQrEncodedPayload(data.publicUrl)
+        setQrUsesPublicLink(true)
+      } else {
+        setQrEncodedPayload(plain)
+      }
+    } catch {
+      setQrEncodedPayload(plain)
+    } finally {
+      setQrModalLoading(false)
+    }
   }
 
   // Render field value based on type
@@ -1288,13 +1336,24 @@ export default function SubmissionsPage() {
                             </span>
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap text-xs font-semibold">
-                            <button
-                              onClick={() => handleViewSubmission(submission)}
-                              className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                            >
-                              <Eye size={14} />
-                              عرض
-                            </button>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                              <button
+                                type="button"
+                                onClick={() => handleViewSubmission(submission)}
+                                className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                              >
+                                <Eye size={14} />
+                                عرض
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void openQrPrintModal(submission)}
+                                className="text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
+                              >
+                                <Printer size={14} />
+                                طباعة QR
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -1382,6 +1441,80 @@ export default function SubmissionsPage() {
           </div>
         )}
       </div>
+
+      {/* QR print modal */}
+      {qrModalOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4 print:static print:inset-auto print:bg-white print:p-0"
+          dir="rtl"
+        >
+          <div
+            id="archive-qr-print-root"
+            className="bg-white rounded-lg max-w-md w-full shadow-xl overflow-hidden print:shadow-none print:max-w-none print:rounded-none print:w-full"
+          >
+            <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between print:hidden">
+              <h3 className="text-lg font-bold text-gray-900">طباعة QR للوثيقة</h3>
+              <button
+                type="button"
+                onClick={() => setQrModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl"
+                aria-label="إغلاق"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-4 print:p-0 print:space-y-0">
+              {qrModalLoading || !qrEncodedPayload ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-3 print:hidden">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" />
+                  <p className="text-sm text-gray-600 font-semibold">جاري تجهيز الرمز...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="archive-qr-print-target flex justify-center print:block">
+                    <img
+                      src={getArchiveQrImageUrl(qrEncodedPayload, ARCHIVE_QR_PRINT_PIXEL_SIZE)}
+                      alt="رمز QR"
+                      className="rounded-lg border border-gray-200 w-[280px] h-[280px] object-contain print:border-0 print:rounded-none print:w-[8cm] print:h-[8cm]"
+                      width={ARCHIVE_QR_PRINT_PIXEL_SIZE}
+                      height={ARCHIVE_QR_PRINT_PIXEL_SIZE}
+                    />
+                  </div>
+                  <p className="text-xs text-center text-gray-600 leading-relaxed print:hidden">
+                    {qrUsesPublicLink
+                      ? 'المسح يفتح صفحة ويب عامة تعرض ملخص الوثيقة (لا تسجيل دخول).'
+                      : 'المسح يعرض نصاً ثابتاً يحتوي بيانات الوثيقة. لرابط تحقق عام، اضبط ARCHIVE_QR_LINK_SECRET في خادم الواجهة.'}
+                  </p>
+                  <pre className="text-[11px] leading-relaxed bg-gray-50 border border-gray-100 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words max-h-40 overflow-y-auto print:hidden">
+                    {qrPlainText}
+                  </pre>
+                  <div className="flex gap-2 print:hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(qrPlainText).then(
+                          () => alert('تم نسخ النص'),
+                          () => alert('تعذر النسخ')
+                        )
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50"
+                    >
+                      نسخ النص
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="flex-1 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700"
+                    >
+                      طباعة
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Submission Detail Modal */}
       {selectedSubmission && (

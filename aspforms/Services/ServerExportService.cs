@@ -1,4 +1,6 @@
+using FormsManagementApi.Data;
 using FormsManagementApi.DTOs;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
@@ -231,13 +233,59 @@ public class ServerExportService : IServerExportService
             // Create a new scope for database operations to avoid disposed context issues
             using var scope = _serviceProvider.CreateScope();
             var formSubmissionService = scope.ServiceProvider.GetRequiredService<IFormSubmissionService>();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            // Get export data using scoped service
+            static SubmissionQueryContext DenyAll() => new()
+            {
+                UserId = Guid.Empty,
+                UserEmail = null,
+                FullAccessFormIds = new HashSet<Guid>(),
+                OwnSubmissionsOnlyFormIds = new HashSet<Guid>()
+            };
+
+            SubmissionQueryContext? accessContext = null;
+            if (!userId.HasValue)
+            {
+                accessContext = DenyAll();
+            }
+            else
+            {
+                var legacySuperAdminId = Guid.Parse("50000000-0000-0000-0000-000000000001");
+                var user = await db.Users.AsNoTracking()
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.Id == userId.Value);
+                if (user == null)
+                {
+                    accessContext = DenyAll();
+                }
+                else
+                {
+                    var roleName = user.Role?.Name;
+                    var isSuper = string.Equals(roleName, "SuperAdmin", StringComparison.OrdinalIgnoreCase)
+                        || user.Id == legacySuperAdminId;
+                    var isDeptAdmin = string.Equals(roleName, "DepartmentAdmin", StringComparison.OrdinalIgnoreCase);
+                    if (!isSuper && !isDeptAdmin)
+                    {
+                        if (user.DepartmentId.HasValue)
+                        {
+                            accessContext = await formSubmissionService.BuildRestrictedSubmissionContextAsync(
+                                userId.Value, user.DepartmentId.Value, user.Email);
+                        }
+                        else
+                        {
+                            accessContext = DenyAll();
+                        }
+                    }
+                }
+            }
+
+            // Get export data using scoped service (same submission visibility as sync export)
             var exportResult = await formSubmissionService.GetFormSubmissionsForExportAsync(
                 operation.Request.FormId,
                 operation.Request.Filters,
                 operation.Request.SelectedFields,
-                operation.Request.IncludeMetadata);
+                operation.Request.IncludeMetadata,
+                accessContext);
 
             _logger.LogInformation("Export data retrieval for {ExportId}: Success={Success}, Message={Message}, DataExists={DataExists}", 
                 operation.ExportId, exportResult.Success, exportResult.Message, exportResult.Data != null);
