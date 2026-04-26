@@ -13,31 +13,41 @@ namespace FormsManagementApi.Controllers;
 public class FormsController : ControllerBase
 {
     private readonly IFormService _formService;
+    private readonly IUserService _userService;
 
-    public FormsController(IFormService formService)
+    public FormsController(IFormService formService, IUserService userService)
     {
         _formService = formService;
+        _userService = userService;
     }
 
     /// <summary>
     /// Get all forms with optional department filtering
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<ApiResponse<PagedResult<FormDto>>>> GetForms([FromQuery] PaginationDto pagination)
+    public async Task<ActionResult<ApiResponse<PagedResult<FormDto>>>> GetForms(
+        [FromQuery] PaginationDto pagination,
+        [FromQuery] Guid? departmentId = null)
     {
-        Guid? departmentId = null;
-        
-        // SuperAdmin can see all forms, others can only see forms from their department
+        Guid? filterDepartmentId = null;
+
+        // Non–SuperAdmin: always scope to their department
         if (!HttpContext.IsSuperAdmin())
         {
-            departmentId = HttpContext.GetDepartmentId();
-            if (!departmentId.HasValue)
+            filterDepartmentId = HttpContext.GetDepartmentId();
+            if (!filterDepartmentId.HasValue)
             {
                 return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<PagedResult<FormDto>>.ErrorResponse("You must be associated with a department to view forms."));
             }
         }
+        else if (departmentId.HasValue)
+        {
+            // SuperAdmin: optional filter by department (e.g. when assigning templates to an archivist)
+            filterDepartmentId = departmentId;
+        }
 
-        var result = await _formService.GetFormsAsync(pagination, departmentId);
+        Guid? archivistUserId = HttpContext.IsArchivist() ? HttpContext.GetUserId() : null;
+        var result = await _formService.GetFormsAsync(pagination, filterDepartmentId, archivistUserId);
         
         if (!result.Success)
         {
@@ -70,6 +80,12 @@ public class FormsController : ControllerBase
             }
         }
 
+        if (!await ArchivistMayAccessFormAsync(id))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<FormDto>.ErrorResponse("لا يمكن الوصول إلى هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة."));
+        }
+
         return Ok(result);
     }
 
@@ -96,6 +112,12 @@ public class FormsController : ControllerBase
             }
         }
 
+        if (!await ArchivistMayAccessFormAsync(formId))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<FormDto>.ErrorResponse("لا يمكن الوصول إلى هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة."));
+        }
+
         return Ok(result);
     }
 
@@ -114,6 +136,12 @@ public class FormsController : ControllerBase
                 return NotFound(result);
             }
 
+            if (!await ArchivistMayAccessFormAsync(formId))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    ApiResponse<FormDto>.ErrorResponse("لا يمكن الوصول إلى هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة."));
+            }
+
             return Ok(result);
         }
         catch (Exception ex)
@@ -130,9 +158,19 @@ public class FormsController : ControllerBase
     /// Create a new form using the new request format
     /// </summary>
     [HttpPost("create")]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin,Archivist")]
     public async Task<ActionResult<ApiResponse<FormDto>>> CreateForm([FromBody] CreateFormRequestDto createFormRequestDto)
     {
+        if (HttpContext.IsArchivist())
+        {
+            var uid = HttpContext.GetUserId();
+            if (!uid.HasValue || !await _userService.HasUserPermissionAsync(uid.Value, "CreateFormTemplate"))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    ApiResponse<FormDto>.ErrorResponse("غير مصرح لك بإنشاء قوالب جديدة. يطلب الأدمن منح صلاحية إنشاء القالب لهذا المستخدم."));
+            }
+        }
+
         // Validate department access
         if (!HttpContext.IsSuperAdmin())
         {
@@ -174,9 +212,19 @@ public class FormsController : ControllerBase
     /// Create a new form using the legacy format
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin,Archivist")]
     public async Task<ActionResult<ApiResponse<FormDto>>> CreateFormLegacy([FromBody] CreateFormDto createFormDto)
     {
+        if (HttpContext.IsArchivist())
+        {
+            var uid = HttpContext.GetUserId();
+            if (!uid.HasValue || !await _userService.HasUserPermissionAsync(uid.Value, "CreateFormTemplate"))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    ApiResponse<FormDto>.ErrorResponse("غير مصرح لك بإنشاء قوالب جديدة. يطلب الأدمن منح صلاحية إنشاء القالب لهذا المستخدم."));
+            }
+        }
+
         Guid departmentId;
         
         // SuperAdmin can specify any department, others use their own department
@@ -222,7 +270,7 @@ public class FormsController : ControllerBase
     /// Update form (DepartmentAdmin or users with update permission)
     /// </summary>
     [HttpPut("{id}")]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<FormDto>>> UpdateForm(Guid id, [FromBody] UpdateFormDto updateFormDto)
     {
         // Get current form info to check authorization
@@ -256,7 +304,7 @@ public class FormsController : ControllerBase
     /// Delete form (DepartmentAdmin or users with delete permission)
     /// </summary>
     [HttpDelete("{id}")]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteForm(Guid id)
     {
         // Get current form info to check authorization
@@ -291,7 +339,7 @@ public class FormsController : ControllerBase
     /// Returns the current status after toggle
     /// </summary>
     [HttpPatch("{id}/toggle-status")]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<string>>> ToggleFormStatus(Guid id)
     {
         // Get current form info to check authorization
@@ -447,7 +495,7 @@ public class FormsController : ControllerBase
     /// Delete form submission (DepartmentAdmin)
     /// </summary>
     [HttpDelete("submissions/{submissionId}")]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteFormSubmission(Guid submissionId)
     {
         // Get submission to check authorization
@@ -482,7 +530,7 @@ public class FormsController : ControllerBase
     /// Get form permissions
     /// </summary>
     [HttpGet("{formId}/permissions")]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<List<FormPermissionDto>>>> GetFormPermissions(Guid formId)
     {
         // Get current form info to check authorization
@@ -516,7 +564,7 @@ public class FormsController : ControllerBase
     /// Add form permission
     /// </summary>
     [HttpPost("{formId}/permissions")]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<FormPermissionDto>>> AddFormPermission(Guid formId, [FromBody] CreateFormPermissionDto createPermissionDto)
     {
         // Get current form info to check authorization
@@ -595,6 +643,12 @@ public class FormsController : ControllerBase
             return NotFound(result);
         }
 
+        if (!await ArchivistMayAccessFormAsync(result.Data!.Id))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<FormPreviewDto>.ErrorResponse("لا يمكن الوصول إلى هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة."));
+        }
+
         return Ok(result);
     }
 
@@ -613,6 +667,22 @@ public class FormsController : ControllerBase
             return NotFound(result);
         }
 
+        if (!await ArchivistMayAccessFormAsync(result.Data!.Id))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                ApiResponse<FormPreviewDto>.ErrorResponse("لا يمكن الوصول إلى هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة."));
+        }
+
         return Ok(result);
+    }
+
+    private async Task<bool> ArchivistMayAccessFormAsync(Guid formId)
+    {
+        if (!HttpContext.IsArchivist())
+            return true;
+        var uid = HttpContext.GetUserId();
+        if (!uid.HasValue)
+            return false;
+        return await _formService.CanArchivistAccessFormAsync(uid.Value, formId);
     }
 }

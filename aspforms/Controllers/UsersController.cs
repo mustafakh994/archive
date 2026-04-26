@@ -12,10 +12,12 @@ namespace FormsManagementApi.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly IFormService _formService;
 
-    public UsersController(IUserService userService)
+    public UsersController(IUserService userService, IFormService formService)
     {
         _userService = userService;
+        _formService = formService;
     }
 
     /// <summary>
@@ -76,7 +78,7 @@ public class UsersController : ControllerBase
     /// Create a new user (SuperAdmin or TenantAdmin)
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin")]
+    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin,DepartmentAdmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> CreateUser([FromBody] CreateUserDto createUserDto)
     {
         // TenantAdmin can only create users in their own department
@@ -103,7 +105,7 @@ public class UsersController : ControllerBase
     /// Update user (SuperAdmin or TenantAdmin)
     /// </summary>
     [HttpPut("{id}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin")]
+    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin,DepartmentAdmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUser(Guid id, [FromBody] UpdateUserDto updateUserDto)
     {
         // Get current user info to check authorization
@@ -137,7 +139,7 @@ public class UsersController : ControllerBase
     /// Delete user (SuperAdmin or TenantAdmin)
     /// </summary>
     [HttpDelete("{id}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin")]
+    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin,DepartmentAdmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteUser(Guid id)
     {
         // Get current user info to check authorization
@@ -171,7 +173,7 @@ public class UsersController : ControllerBase
     /// Toggle user active status (SuperAdmin or TenantAdmin)
     /// </summary>
     [HttpPatch("{id}/toggle-status")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin")]
+    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin,DepartmentAdmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<bool>>> ToggleUserStatus(Guid id)
     {
         // Get current user info to check authorization
@@ -205,7 +207,7 @@ public class UsersController : ControllerBase
     /// Get user permissions (SuperAdmin or TenantAdmin)
     /// </summary>
     [HttpGet("{userId}/permissions")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin")]
+    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin,DepartmentAdmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<List<UserPermissionDto>>>> GetUserPermissions(Guid userId)
     {
         // Get current user info to check authorization
@@ -239,7 +241,7 @@ public class UsersController : ControllerBase
     /// Add user permission (SuperAdmin or TenantAdmin)
     /// </summary>
     [HttpPost("{userId}/permissions")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin")]
+    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin,DepartmentAdmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<UserPermissionDto>>> AddUserPermission(Guid userId, [FromBody] string permission)
     {
         // Get current user info to check authorization
@@ -273,7 +275,7 @@ public class UsersController : ControllerBase
     /// Remove user permission (SuperAdmin or TenantAdmin)
     /// </summary>
     [HttpDelete("{userId}/permissions/{permission}")]
-    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin")]
+    [Authorize(Roles = "SuperAdmin,TenantAdmin,Superadmin,DepartmentAdmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<bool>>> RemoveUserPermission(Guid userId, string permission)
     {
         // Get current user info to check authorization
@@ -295,6 +297,39 @@ public class UsersController : ControllerBase
 
         var result = await _userService.RemoveUserPermissionAsync(userId, permission);
         
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Form template assignments for a user (e.g. archivist). SuperAdmin or DepartmentAdmin; department scope for admins.
+    /// </summary>
+    [HttpGet("{userId}/form-permissions")]
+    [Authorize(Roles = "SuperAdmin,Superadmin,DepartmentAdmin,Departmentadmin")]
+    public async Task<ActionResult<ApiResponse<List<FormPermissionDto>>>> GetUserFormPermissions(Guid userId)
+    {
+        var targetResult = await _userService.GetUserByIdAsync(userId);
+        if (!targetResult.Success || targetResult.Data == null)
+        {
+            return NotFound(targetResult);
+        }
+
+        if (!HttpContext.IsSuperAdmin())
+        {
+            var adminDept = HttpContext.GetDepartmentId();
+            if (!adminDept.HasValue || targetResult.Data.DepartmentId != adminDept)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, ApiResponse<List<FormPermissionDto>>.ErrorResponse("You can only view form assignments for users in your department."));
+            }
+        }
+
+        Guid? restrictDept = HttpContext.IsSuperAdmin() ? null : HttpContext.GetDepartmentId();
+        var result = await _formService.GetFormPermissionsForUserAsync(userId, restrictDept);
+
         if (!result.Success)
         {
             return BadRequest(result);

@@ -163,7 +163,7 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(e => e.SubmittedByUser)
-                .WithMany()
+                .WithMany(u => u.FormSubmissions)
                 .HasForeignKey(e => e.SubmittedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
         });

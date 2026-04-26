@@ -145,7 +145,7 @@ public class UserService : IUserService
             }
             else if (!string.IsNullOrEmpty(createUserDto.Role))
             {
-                var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == createUserDto.Role);
+                var role = await ResolveRoleByNameAndDepartmentAsync(createUserDto.Role, createUserDto.DepartmentId);
                 if (role != null)
                 {
                     roleId = role.Id;
@@ -229,7 +229,7 @@ public class UserService : IUserService
             }
             else if (!string.IsNullOrEmpty(updateUserDto.Role))
             {
-                var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == updateUserDto.Role);
+                var role = await ResolveRoleByNameAndDepartmentAsync(updateUserDto.Role, updateUserDto.DepartmentId ?? user.DepartmentId);
                 user.RoleId = role?.Id;
             }
 
@@ -364,11 +364,12 @@ public class UserService : IUserService
                 return ApiResponse<UserPermissionDto>.ErrorResponse("User not found.");
             }
 
-            // Find the permission by name
-            var permissionEntity = await _context.Permissions.FirstOrDefaultAsync(p => p.Name == permission);
+            // Resolve permission by name within the user's department (supports same Name per department)
+            var permissionEntity = await _context.Permissions.FirstOrDefaultAsync(p =>
+                p.Name == permission && p.DepartmentId == user.DepartmentId);
             if (permissionEntity == null)
             {
-                return ApiResponse<UserPermissionDto>.ErrorResponse("Permission not found.");
+                return ApiResponse<UserPermissionDto>.ErrorResponse("Permission not found for this user's department.");
             }
 
             // Check if permission already exists
@@ -417,11 +418,17 @@ public class UserService : IUserService
                 return ApiResponse<bool>.ErrorResponse("User-specific permissions are not available in this database yet.");
             }
 
-            // Find the permission by name
-            var permissionEntity = await _context.Permissions.FirstOrDefaultAsync(p => p.Name == permission);
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return ApiResponse<bool>.ErrorResponse("User not found.");
+            }
+
+            var permissionEntity = await _context.Permissions.FirstOrDefaultAsync(p =>
+                p.Name == permission && p.DepartmentId == user.DepartmentId);
             if (permissionEntity == null)
             {
-                return ApiResponse<bool>.ErrorResponse("Permission not found.");
+                return ApiResponse<bool>.ErrorResponse("Permission not found for this user's department.");
             }
 
             var userPermission = await _context.UserPermissions
@@ -523,6 +530,44 @@ public class UserService : IUserService
     {
         return ex.SqlState == PostgresErrorCodes.UndefinedTable
             || ex.SqlState == PostgresErrorCodes.UndefinedColumn;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> HasUserPermissionAsync(Guid userId, string permissionName)
+    {
+        if (!await IsUserPermissionStoreAvailableAsync())
+        {
+            return false;
+        }
+
+        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null)
+        {
+            return false;
+        }
+
+        return await _context.UserPermissions
+            .Include(up => up.Permission)
+            .AnyAsync(up =>
+                up.UserId == userId &&
+                up.Granted &&
+                up.Permission.Name == permissionName &&
+                up.Permission.DepartmentId == user.DepartmentId);
+    }
+
+    private async Task<Role?> ResolveRoleByNameAndDepartmentAsync(string roleName, Guid? departmentId)
+    {
+        if (departmentId.HasValue && departmentId.Value != Guid.Empty)
+        {
+            var exact = await _context.Roles.FirstOrDefaultAsync(r =>
+                r.Name == roleName && r.DepartmentId == departmentId.Value);
+            if (exact != null)
+            {
+                return exact;
+            }
+        }
+
+        return await _context.Roles.FirstOrDefaultAsync(r => r.Name == roleName);
     }
 
     private async Task TrySyncPrimaryRoleAssignmentAsync(User user)

@@ -13,4 +13,7 @@ public interface IUserService
     Task<ApiResponse<List<UserPermissionDto>>> GetUserPermissionsAsync(Guid userId);
     Task<ApiResponse<UserPermissionDto>> AddUserPermissionAsync(Guid userId, string permission);
     Task<ApiResponse<bool>> RemoveUserPermissionAsync(Guid userId, string permission);
+
+    /// <summary>True if the user has an active UserPermission for the given permission name in their department (e.g. CreateFormTemplate).</summary>
+    Task<bool> HasUserPermissionAsync(Guid userId, string permissionName);
 }

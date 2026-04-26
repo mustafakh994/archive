@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using FormsManagementApi.Data;
 using FormsManagementApi.DTOs;
 using FormsManagementApi.Models;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 
@@ -12,11 +13,13 @@ public class DepartmentService : IDepartmentService
 {
     private readonly ApplicationDbContext _context;
     private readonly IMapper _mapper;
+    private readonly ILogger<DepartmentService> _logger;
 
-    public DepartmentService(ApplicationDbContext context, IMapper mapper)
+    public DepartmentService(ApplicationDbContext context, IMapper mapper, ILogger<DepartmentService> logger)
     {
         _context = context;
         _mapper = mapper;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<PagedResult<DepartmentDto>>> GetDepartmentsAsync(PaginationDto pagination)
@@ -72,14 +75,39 @@ public class DepartmentService : IDepartmentService
     {
         try
         {
+            createDto.Name = createDto.Name?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(createDto.Name))
+            {
+                return ApiResponse<DepartmentDto>.ErrorResponse("Department name is required.");
+            }
+
+            createDto.Description = string.IsNullOrWhiteSpace(createDto.Description) ? null : createDto.Description.Trim();
+            if (!string.IsNullOrWhiteSpace(createDto.Code))
+            {
+                createDto.Code = createDto.Code.Trim().ToUpperInvariant();
+            }
+
             var department = _mapper.Map<Department>(createDto);
             department.CreatedAt = DateTimeOffset.UtcNow;
 
             _context.Departments.Add(department);
             await _context.SaveChangesAsync();
 
+            await DepartmentInfrastructureInitializer.EnsureDepartmentAsync(_context, department.Id, _logger);
+
             var departmentDto = _mapper.Map<DepartmentDto>(department);
             return ApiResponse<DepartmentDto>.SuccessResponse(departmentDto, "Department created successfully.");
+        }
+        catch (DbUpdateException ex)
+        {
+            if (ex.InnerException?.Message?.Contains("IX_Departments_Code", StringComparison.OrdinalIgnoreCase) == true ||
+                ex.InnerException?.Message?.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return ApiResponse<DepartmentDto>.ErrorResponse(
+                    "يوجد مديرية بنفس هذا الكود. / A department with this code already exists.");
+            }
+
+            return ApiResponse<DepartmentDto>.ErrorResponse($"Error creating department: {ex.Message}");
         }
         catch (Exception ex)
         {
@@ -161,7 +189,20 @@ public class DepartmentService : IDepartmentService
     {
         try
         {
-            var exists = await _context.Departments.AnyAsync(d => d.Code == code);
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return ApiResponse<bool>.SuccessResponse(false, "Code existence check completed.");
+            }
+
+            var normalized = code.Trim().ToUpperInvariant();
+            // Compare in memory — avoids EF/SQL translation issues with Trim() on some providers.
+            var codes = await _context.Departments
+                .AsNoTracking()
+                .Where(d => d.Code != null && d.Code != string.Empty)
+                .Select(d => d.Code!)
+                .ToListAsync();
+
+            var exists = codes.Any(c => string.Equals(c.Trim(), normalized, StringComparison.OrdinalIgnoreCase));
             return ApiResponse<bool>.SuccessResponse(exists, "Code existence check completed.");
         }
         catch (Exception ex)

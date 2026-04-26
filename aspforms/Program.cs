@@ -12,8 +12,21 @@ using FormsManagementApi.Middleware;
 using FormsManagementApi.Models;
 using FluentValidation.AspNetCore;
 using FluentValidation;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Allow large/unbounded upload requests for file and multi-file endpoints.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = null;
+});
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = long.MaxValue;
+    options.ValueLengthLimit = int.MaxValue;
+    options.MultipartHeadersLengthLimit = int.MaxValue;
+});
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -221,6 +234,7 @@ using (var scope = app.Services.CreateScope())
         // Update user passwords with proper hashes
         await UpdateUserPasswords(context, logger);
         await SeedRolesAsync(context, logger);
+        await DepartmentInfrastructureInitializer.EnsureAllDepartmentsAsync(context, logger);
     }
     catch (Exception ex)
     {

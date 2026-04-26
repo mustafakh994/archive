@@ -400,6 +400,13 @@ public class FormSubmissionService : IFormSubmissionService
                 return ApiResponse<FormSubmissionDto>.ErrorResponse("Form is not active and cannot accept submissions.");
             }
 
+            if (userId.HasValue && await UserIsArchivistAsync(userId.Value) &&
+                !await ArchivistHasFormAssignmentAsync(userId.Value, formId))
+            {
+                return ApiResponse<FormSubmissionDto>.ErrorResponse(
+                    "لا يمكن استخدام هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة.");
+            }
+
             // Determine version to use
             int versionToUse = createSubmissionDto.FormVersion ?? form.Version;
 
@@ -473,6 +480,13 @@ public class FormSubmissionService : IFormSubmissionService
             if (form.Status != "Active")
             {
                 return ApiResponse<FormSubmissionDto>.ErrorResponse("Form is not active and cannot accept submissions.");
+            }
+
+            if (userId.HasValue && await UserIsArchivistAsync(userId.Value) &&
+                !await ArchivistHasFormAssignmentAsync(userId.Value, formId))
+            {
+                return ApiResponse<FormSubmissionDto>.ErrorResponse(
+                    "لا يمكن استخدام هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة.");
             }
 
             // Parse and validate response data JSON
@@ -751,6 +765,13 @@ public class FormSubmissionService : IFormSubmissionService
                 return ApiResponse<FormSubmissionDto>.ErrorResponse("Form is not active and cannot accept submissions.");
             }
 
+            if (userId.HasValue && await UserIsArchivistAsync(userId.Value) &&
+                !await ArchivistHasFormAssignmentAsync(userId.Value, formId))
+            {
+                return ApiResponse<FormSubmissionDto>.ErrorResponse(
+                    "لا يمكن استخدام هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة.");
+            }
+
             // Validate that the specific version exists
             var schemaVersion = await _context.FormSchemaVersions
                 .FirstOrDefaultAsync(fsv => fsv.FormId == formId && fsv.VersionNumber == versionNumber);
@@ -821,6 +842,13 @@ public class FormSubmissionService : IFormSubmissionService
             if (form.Status != "Active")
             {
                 return ApiResponse<FormSubmissionDto>.ErrorResponse("Form is not active and cannot accept submissions.");
+            }
+
+            if (userId.HasValue && await UserIsArchivistAsync(userId.Value) &&
+                !await ArchivistHasFormAssignmentAsync(userId.Value, formId))
+            {
+                return ApiResponse<FormSubmissionDto>.ErrorResponse(
+                    "لا يمكن استخدام هذا القالب: يجب إسناده لك من قبل مدير القسم أو الإدارة.");
             }
 
             // Get the latest schema version
@@ -1268,6 +1296,19 @@ public class FormSubmissionService : IFormSubmissionService
             OwnSubmissionsOnlyFormIds = own
         };
     }
+
+    private async Task<bool> UserIsArchivistAsync(Guid userId)
+    {
+        var u = await _context.Users
+            .Include(x => x.Role)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == userId);
+        return u?.Role != null &&
+               string.Equals(u.Role.Name, "Archivist", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private Task<bool> ArchivistHasFormAssignmentAsync(Guid userId, Guid formId) =>
+        _context.FormPermissions.AnyAsync(fp => fp.FormId == formId && fp.UserId == userId);
 
     private static IQueryable<FormSubmission> ApplySubmissionAccessFilter(IQueryable<FormSubmission> query, SubmissionQueryContext? access)
     {

@@ -548,14 +548,14 @@ namespace FormsManagementApi.Migrations
                     b.Property<IPAddress>("SubmitterIp")
                         .HasColumnType("inet");
 
-                    b.Property<Guid?>("UserId")
+                    b.Property<Guid?>("SubmittedByUserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("FormId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("SubmittedByUserId");
 
                     b.ToTable("FormSubmissions");
 
@@ -1419,11 +1419,14 @@ namespace FormsManagementApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("FormsManagementApi.Models.User", null)
+                    b.HasOne("FormsManagementApi.Models.User", "SubmittedByUser")
                         .WithMany("FormSubmissions")
-                        .HasForeignKey("UserId");
+                        .HasForeignKey("SubmittedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Form");
+
+                    b.Navigation("SubmittedByUser");
                 });
 
             modelBuilder.Entity("FormsManagementApi.Models.FormSubmissionAttachment", b =>

@@ -14,7 +14,6 @@ public class FileService : IFileService
     private readonly IAttachmentCrypto _attachmentCrypto;
     private readonly ILogger<FileService> _logger;
     private readonly string _uploadPath;
-    private readonly long _maxFileSize;
     private readonly string[] _allowedExtensions;
 
     public FileService(ApplicationDbContext context, IMapper mapper, IConfiguration configuration, IAttachmentCrypto attachmentCrypto, ILogger<FileService> logger)
@@ -27,7 +26,6 @@ public class FileService : IFileService
         
         // Configure file upload settings
         _uploadPath = _configuration.GetValue<string>("FileUpload:UploadPath") ?? "uploads";
-        _maxFileSize = _configuration.GetValue<long?>("FileUpload:MaxFileSize") ?? 10L * 1024L * 1024L; // 10MB default
         _allowedExtensions = _configuration.GetSection("FileUpload:AllowedExtensions").Get<string[]>() ?? 
             new[] { ".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".zip" };
         
@@ -392,12 +390,6 @@ public class FileService : IFileService
         if (file == null || file.Length == 0)
         {
             errorMessage = "File is empty or not provided.";
-            return false;
-        }
-
-        if (file.Length > _maxFileSize)
-        {
-            errorMessage = $"File size exceeds maximum allowed size of {_maxFileSize / (1024 * 1024)} MB.";
             return false;
         }
 

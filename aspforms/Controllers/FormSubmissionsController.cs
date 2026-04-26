@@ -240,7 +240,7 @@ public class FormSubmissionsController : ControllerBase
     /// <param name="submissionId">The unique identifier of the form submission to delete.</param>
     /// <returns>Success status of the deletion operation.</returns>
     [HttpDelete("{submissionId}")]
-    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,Superadmin,Departmentadmin")]
+    [Authorize(Roles = "SuperAdmin,DepartmentAdmin,DepartmentManager,Department Manager,Superadmin,Departmentadmin")]
     public async Task<ActionResult<ApiResponse<bool>>> DeleteFormSubmission(Guid submissionId)
     {
         var result = await _formSubmissionService.DeleteFormSubmissionAsync(submissionId);

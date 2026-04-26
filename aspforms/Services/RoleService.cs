@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using FormsManagementApi.Data;
 using FormsManagementApi.DTOs;
 using FormsManagementApi.Models;
@@ -10,17 +11,26 @@ public class RoleService : IRoleService
 {
     private readonly ApplicationDbContext _context;
     private readonly IMapper _mapper;
+    private readonly ILogger<RoleService> _logger;
 
-    public RoleService(ApplicationDbContext context, IMapper mapper)
+    public RoleService(ApplicationDbContext context, IMapper mapper, ILogger<RoleService> logger)
     {
         _context = context;
         _mapper = mapper;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<PagedResult<RoleDto>>> GetRolesByDepartmentAsync(Guid departmentId, PaginationDto pagination)
     {
         try
         {
+            // Self-heal: older departments may have no Role rows; seed standard roles on first read.
+            if (await _context.Departments.AnyAsync(d => d.Id == departmentId) &&
+                !await _context.Roles.AnyAsync(r => r.DepartmentId == departmentId))
+            {
+                await DepartmentInfrastructureInitializer.EnsureDepartmentAsync(_context, departmentId, _logger);
+            }
+
             var query = _context.Roles
                 .Where(r => r.DepartmentId == departmentId)
                 .AsQueryable();

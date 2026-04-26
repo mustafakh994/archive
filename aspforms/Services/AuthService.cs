@@ -268,6 +268,8 @@ public class AuthService : IAuthService
             return "SuperAdmin";
         if (string.Equals(roleName, "DepartmentAdmin", StringComparison.OrdinalIgnoreCase))
             return "DepartmentAdmin";
+        if (string.Equals(roleName, "Archivist", StringComparison.OrdinalIgnoreCase))
+            return "Archivist";
         return roleName;
     }
 

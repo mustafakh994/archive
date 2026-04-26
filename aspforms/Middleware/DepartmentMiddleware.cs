@@ -89,7 +89,21 @@ public static class HttpContextExtensions
     public static bool IsDepartmentAdmin(this HttpContext context)
     {
         var role = context.GetUserRole();
-        return !string.IsNullOrEmpty(role) && string.Equals(role, "DepartmentAdmin", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrEmpty(role))
+        {
+            return false;
+        }
+
+        return string.Equals(role, "DepartmentAdmin", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "DepartmentManager", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Department Manager", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>مؤرشف — department archivist; uses only forms assigned via FormPermissions unless granted individual CreateFormTemplate.</summary>
+    public static bool IsArchivist(this HttpContext context)
+    {
+        var role = context.GetUserRole();
+        return !string.IsNullOrEmpty(role) && string.Equals(role, "Archivist", StringComparison.OrdinalIgnoreCase);
     }
 
     // Backward compatibility - maps to IsDepartmentAdmin

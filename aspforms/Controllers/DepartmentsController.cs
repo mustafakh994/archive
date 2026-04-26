@@ -63,16 +63,19 @@ public class DepartmentsController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ApiResponse<DepartmentDto>.Failure("Invalid input data", ModelState));
+            return BadRequest(ApiResponse<DepartmentDto>.Failure(
+                "بيانات المديرية غير صالحة. تأكد من الاسم والكود والوصف. / Invalid department data.",
+                ModelState));
         }
 
-        // Check if department code already exists
-        if (!string.IsNullOrEmpty(createDto.Code))
+        // Check if department code already exists (trim; service normalizes case)
+        if (!string.IsNullOrWhiteSpace(createDto.Code))
         {
-            var existsResult = await _departmentService.ExistsByCodeAsync(createDto.Code);
+            var existsResult = await _departmentService.ExistsByCodeAsync(createDto.Code.Trim());
             if (existsResult.Success && existsResult.Data)
             {
-                return BadRequest(ApiResponse<DepartmentDto>.Failure("A department with this code already exists"));
+                return BadRequest(ApiResponse<DepartmentDto>.Failure(
+                    "يوجد مديرية بنفس هذا الكود. استخدم كوداً آخر (أحرف لاتينية وأرقام فقط). / A department with this code already exists."));
             }
         }
 

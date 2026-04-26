@@ -12,15 +12,17 @@ public class FormService : IFormService
     private readonly ApplicationDbContext _context;
     private readonly IMapper _mapper;
     private readonly ILogger<FormService> _logger;
+    private readonly IUserService _userService;
 
-    public FormService(ApplicationDbContext context, IMapper mapper, ILogger<FormService> logger)
+    public FormService(ApplicationDbContext context, IMapper mapper, ILogger<FormService> logger, IUserService userService)
     {
         _context = context;
         _mapper = mapper;
         _logger = logger;
+        _userService = userService;
     }
 
-    public async Task<ApiResponse<PagedResult<FormDto>>> GetFormsAsync(PaginationDto pagination, Guid? departmentId = null)
+    public async Task<ApiResponse<PagedResult<FormDto>>> GetFormsAsync(PaginationDto pagination, Guid? departmentId = null, Guid? archivistUserId = null)
     {
         try
         {
@@ -39,6 +41,22 @@ public class FormService : IFormService
                 Console.WriteLine($"[DEBUG] Filtering by departmentId: {departmentId.Value}");
                 query = query.Where(f => f.DepartmentId == departmentId.Value);
                 Console.WriteLine($"[DEBUG] After department filter, Forms count: {query.Count()}");
+            }
+
+            // مؤرشف: only forms assigned to them, or forms they created if they have individual CreateFormTemplate
+            if (archivistUserId.HasValue)
+            {
+                var assignedFormIds = await _context.FormPermissions
+                    .Where(fp => fp.UserId == archivistUserId.Value)
+                    .Select(fp => fp.FormId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var canCreateTemplates = await _userService.HasUserPermissionAsync(archivistUserId.Value, "CreateFormTemplate");
+
+                query = query.Where(f =>
+                    assignedFormIds.Contains(f.Id) ||
+                    (canCreateTemplates && f.CreatedBy == archivistUserId.Value));
             }
 
             if (!string.IsNullOrEmpty(pagination.Search))
@@ -90,6 +108,23 @@ public class FormService : IFormService
         {
             return ApiResponse<PagedResult<FormDto>>.ErrorResponse($"An error occurred while retrieving forms: {ex.Message}");
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> CanArchivistAccessFormAsync(Guid userId, Guid formId)
+    {
+        if (await _context.FormPermissions.AnyAsync(fp => fp.FormId == formId && fp.UserId == userId))
+        {
+            return true;
+        }
+
+        var form = await _context.Forms.AsNoTracking().FirstOrDefaultAsync(f => f.Id == formId);
+        if (form == null || form.CreatedBy != userId)
+        {
+            return false;
+        }
+
+        return await _userService.HasUserPermissionAsync(userId, "CreateFormTemplate");
     }
 
     public async Task<ApiResponse<FormDto>> GetFormByIdAsync(Guid id)
@@ -703,6 +738,36 @@ public class FormService : IFormService
         catch (Exception ex)
         {
             return ApiResponse<List<FormPermissionDto>>.ErrorResponse($"An error occurred while retrieving form permissions: {ex.Message}");
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<ApiResponse<List<FormPermissionDto>>> GetFormPermissionsForUserAsync(Guid userId, Guid? restrictToDepartmentId)
+    {
+        try
+        {
+            var query = _context.FormPermissions
+                .AsNoTracking()
+                .Include(fp => fp.Form)
+                .Include(fp => fp.User)
+                .Where(fp => fp.UserId == userId && fp.Form != null);
+
+            if (restrictToDepartmentId.HasValue)
+            {
+                query = query.Where(fp => fp.Form!.DepartmentId == restrictToDepartmentId.Value);
+            }
+
+            var permissions = await query
+                .OrderBy(fp => fp.Form!.Title)
+                .ThenBy(fp => fp.Permission)
+                .ToListAsync();
+
+            var permissionDtos = _mapper.Map<List<FormPermissionDto>>(permissions);
+            return ApiResponse<List<FormPermissionDto>>.SuccessResponse(permissionDtos, "User form permissions retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            return ApiResponse<List<FormPermissionDto>>.ErrorResponse($"An error occurred while retrieving user form permissions: {ex.Message}");
         }
     }
 
