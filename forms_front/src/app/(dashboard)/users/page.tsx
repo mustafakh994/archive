@@ -2,52 +2,48 @@
 
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PlusCircle, MoreHorizontal, Users, Edit, Eye, Trash2, UserCheck, UserX, Briefcase } from 'lucide-react'
+import { PlusCircle, MoreHorizontal, Users, Edit, Eye, Trash2, UserCheck, UserX, Briefcase, ClipboardList, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useUserStore } from '@/lib/store/useUserStore'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import { useSuccessToast, useErrorToast } from '@/components/ui/Toast'
 import { TableDate } from '@/components/ui/DateDisplay'
+import { isArchivistUser, isDepartmentAdminUser, isSuperAdminUser } from '@/lib/role-utils'
+import type { User } from '@/lib/api/client'
 
 
 export default function UserManagementPage() {
     const router = useRouter()
-    const { users, isLoading, error, fetchUsers, updateUser } = useUserStore()
+    const { users, userListPagination, isLoading, error, fetchUsers, updateUser } = useUserStore()
     const { user: currentUser } = useAuthStore()
     const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
+    const [page, setPage] = useState(1)
+    const [pageSize, setPageSize] = useState(10)
     
     const successToast = useSuccessToast()
     const errorToast = useErrorToast()
     
-    // Accept role names regardless of casing/style coming from the API.
-    const normalizedRoleName = (currentUser?.role?.name || currentUser?.roleName || '').toLowerCase()
-    const isSuperAdmin = normalizedRoleName === 'superadmin'
-    const isAuthorized = isSuperAdmin
-
-    // Debug logs
-    console.log('Current User:', currentUser)
-    console.log('Current User Role:', currentUser?.role)
-    console.log('Current User Role Name:', currentUser?.role?.name)
-    console.log('Is Super Admin:', isSuperAdmin)
-    console.log('Users in component:', users, 'Type:', typeof users, 'Is Array:', Array.isArray(users))
+    const isSuperAdmin = isSuperAdminUser(currentUser)
+    const isDepartmentAdmin = isDepartmentAdminUser(currentUser)
+    const isAuthorized = isSuperAdmin || isDepartmentAdmin
 
     useEffect(() => {
         if (currentUser && !isAuthorized) {
-            errorToast('غير مصرح', 'إدارة المستخدمين متاحة لمدير النظام فقط')
+            errorToast('غير مصرح', 'إدارة المستخدمين متاحة لمدير النظام أو مدير القسم')
             router.push('/dashboard')
             return
         }
 
-        if (currentUser) {
-            const userRole = (currentUser.role?.name || currentUser.roleName || '').toLowerCase()
-            
-            if (userRole === 'superadmin') {
-                // SuperAdmin sees all users across all departments
-                console.log('User is SuperAdmin - fetching all users')
-                fetchUsers()
-            }
+        if (!currentUser || !isAuthorized) {
+            return
         }
-    }, [currentUser, errorToast, fetchUsers, isAuthorized, router])
+
+        if (isSuperAdmin) {
+            void fetchUsers({ page, pageSize })
+        } else if (isDepartmentAdmin && currentUser.departmentId) {
+            void fetchUsers({ departmentId: currentUser.departmentId, page, pageSize })
+        }
+    }, [currentUser, fetchUsers, isAuthorized, isSuperAdmin, isDepartmentAdmin, router, page, pageSize])
 
     // Close action menu when clicking outside
     useEffect(() => {
@@ -89,6 +85,15 @@ export default function UserManagementPage() {
 
     // Use mock data if users is not an array (API error)
     const displayUsers = Array.isArray(users) ? users : mockUsers
+
+    const p = userListPagination
+    const rangeStart = p && p.totalItems > 0 ? (p.page - 1) * p.pageSize + 1 : 0
+    const rangeEnd = p && p.totalItems > 0 ? Math.min(p.page * p.pageSize, p.totalItems) : 0
+
+    const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setPageSize(Number(e.target.value))
+        setPage(1)
+    }
 
     const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
         try {
@@ -165,10 +170,14 @@ export default function UserManagementPage() {
                 )}
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-visible transition-all hover:shadow-md">
-                <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-sm text-right text-slate-600">
-                        <thead className="bg-slate-50 text-[13px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 transition-all hover:shadow-md">
+                <div
+                    className="max-h-[min(70vh,720px)] overflow-auto overscroll-contain rounded-2xl [-webkit-overflow-scrolling:touch] custom-scrollbar"
+                    role="region"
+                    aria-label="جدول المستخدمين — قابل للتمرير"
+                >
+                    <table className="w-full min-w-[56rem] text-sm text-right text-slate-600">
+                        <thead className="sticky top-0 z-20 bg-slate-50 text-[13px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/80 shadow-[0_1px_0_0_rgb(226_232_240)]">
                             <tr>
                                 <th scope="col" className="px-6 py-5">الاسم</th>
                                 <th scope="col" className="px-6 py-5">البريد الإلكتروني</th>
@@ -190,7 +199,9 @@ export default function UserManagementPage() {
                                     </td>
                                 </tr>
                             ) : (
-                                displayUsers.map((user) => (
+                                displayUsers.map((row) => {
+                                    const user = row as User
+                                    return (
                                     <tr key={user.id} className="hover:bg-indigo-50/30 transition-colors group">
                                         <th scope="row" className="px-6 py-4.5 font-bold text-slate-900 whitespace-nowrap text-[15px]">
                                             <div className="flex items-center gap-3">
@@ -202,10 +213,10 @@ export default function UserManagementPage() {
                                         </th>
                                         <td className="px-6 py-4.5 text-[14px] font-medium text-slate-500" dir="ltr text-right">{user.email}</td>
                                         <td className="px-6 py-4.5 text-[14px] font-bold text-slate-700">
-                                            {user.department?.name ? (
+                                            {user.department?.name ?? user.departmentName ? (
                                                 <span className="inline-flex items-center gap-1.5 break-words">
                                                     <Briefcase size={14} className="text-indigo-500" />
-                                                    {user.department.name}
+                                                    {user.department?.name ?? user.departmentName}
                                                 </span>
                                             ) : (
                                                 <span className="text-slate-400">غير محدد</span>
@@ -213,7 +224,7 @@ export default function UserManagementPage() {
                                         </td>
                                         <td className="px-6 py-4.5">
                                             <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-2.5 py-1 text-sm font-bold text-slate-700 border border-slate-200">
-                                                {user.role?.name || 'غير محدد'}
+                                                {user.role?.name ?? user.roleName ?? 'غير محدد'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4.5">
@@ -280,18 +291,29 @@ export default function UserManagementPage() {
                                                             </button>
                                                         )}
 
-                                                        {isSuperAdmin && (
+                                                        {isAuthorized && isArchivistUser(user as User) && (
+                                                            <Link
+                                                                href={`/users/${user.id}#archivist-templates`}
+                                                                className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors border-t border-slate-100 mt-1 pt-2"
+                                                                onClick={() => setActionMenuOpen(null)}
+                                                            >
+                                                                <ClipboardList size={16} strokeWidth={2.5} />
+                                                                إسناد قوالب لمؤرشف
+                                                            </Link>
+                                                        )}
+
+                                                        {isAuthorized && isSuperAdmin && (
                                                             <Link
                                                                 href={`/users/${user.id}/assignments`}
                                                                 className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors border-t border-slate-100 mt-1 pt-2"
                                                                 onClick={() => setActionMenuOpen(null)}
                                                             >
                                                                 <Briefcase size={16} strokeWidth={2.5} />
-                                                                إدارة الإسنادات
+                                                                إدارة الإسنادات (أدوار)
                                                             </Link>
                                                         )}
                                                         
-                                                        {isSuperAdmin && (
+                                                        {isAuthorized && (
                                                             <button
                                                                 onClick={() => {
                                                                     setActionMenuOpen(null)
@@ -307,11 +329,65 @@ export default function UserManagementPage() {
                                             )}
                                         </td>
                                     </tr>
-                                ))
+                                )})
                             )}
                         </tbody>
                     </table>
                 </div>
+
+                {Array.isArray(users) && p && p.totalItems > 0 && (
+                    <div
+                        className="flex flex-col gap-4 border-t border-slate-200/80 bg-slate-50/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+                        dir="rtl"
+                    >
+                        <p className="text-[13px] font-semibold text-slate-600">
+                            عرض{' '}
+                            <span className="font-black text-slate-900 tabular-nums">{rangeStart}</span>
+                            –
+                            <span className="font-black text-slate-900 tabular-nums">{rangeEnd}</span>
+                            {' '}من{' '}
+                            <span className="font-black text-slate-900 tabular-nums">{p.totalItems}</span>
+                            {' '}مستخدم
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
+                            <label className="flex items-center gap-2 text-[13px] font-bold text-slate-600">
+                                <span className="whitespace-nowrap">عدد الصفوف</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={handlePageSizeChange}
+                                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] font-bold text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                </select>
+                            </label>
+                            <span className="text-[13px] font-bold text-slate-500 tabular-nums">
+                                صفحة {p.page} من {p.totalPages}
+                            </span>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    disabled={!p.hasPreviousPage}
+                                    onClick={() => setPage((x) => Math.max(1, x - 1))}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    <ChevronRight size={16} strokeWidth={2.5} className="shrink-0" />
+                                    السابق
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!p.hasNextPage}
+                                    onClick={() => setPage((x) => x + 1)}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    التالي
+                                    <ChevronLeft size={16} strokeWidth={2.5} className="shrink-0" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )

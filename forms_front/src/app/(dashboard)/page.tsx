@@ -24,6 +24,7 @@ interface FormArchiveStat {
 interface DashboardStatsState {
   userCount: number
   formCount: number
+  departmentCount: number
   departmentUserStats: DepartmentUserStat[]
   formArchiveStats: FormArchiveStat[]
 }
@@ -31,6 +32,7 @@ interface DashboardStatsState {
 const EMPTY_STATS: DashboardStatsState = {
   userCount: 0,
   formCount: 0,
+  departmentCount: 0,
   departmentUserStats: [],
   formArchiveStats: [],
 }
@@ -49,41 +51,52 @@ export default function DashboardHomePage() {
   const isSuperAdmin = normalizedRoleName === 'superadmin'
   const isDepartmentAdmin = normalizedRoleName === 'departmentadmin'
 
-  const getScopedUsers = useCallback(async (): Promise<User[]> => {
+  const getScopedUsers = useCallback(async (): Promise<{ items: User[]; totalCount: number }> => {
     if (!user) {
-      return []
+      return { items: [], totalCount: 0 }
     }
 
     if (isSuperAdmin) {
-      const response = await apiClient.getUsers()
-      return response.data?.items || []
+      const response = await apiClient.getUsers({ pageSize: 1000 })
+      const items = response.data?.items || []
+      return { items, totalCount: response.data?.totalCount ?? items.length }
     }
 
     if (isDepartmentAdmin && user.departmentId) {
-      const response = await apiClient.getUsers({ departmentId: user.departmentId })
-      return response.data?.items || []
+      const response = await apiClient.getUsers({
+        departmentId: user.departmentId,
+        pageSize: 1000,
+      })
+      const items = response.data?.items || []
+      return { items, totalCount: response.data?.totalCount ?? items.length }
     }
 
-    return [user]
+    return { items: [user], totalCount: 1 }
   }, [isDepartmentAdmin, isSuperAdmin, user])
 
-  const getScopedForms = useCallback(async (): Promise<Form[]> => {
+  const getScopedForms = useCallback(async (): Promise<{ items: Form[]; totalCount: number }> => {
     if (!user) {
-      return []
+      return { items: [], totalCount: 0 }
     }
 
     if (isSuperAdmin) {
-      const response = await apiClient.getForms()
-      return response.data?.items || []
+      const response = await apiClient.getForms({ pageSize: 1000 })
+      const items = response.data?.items || []
+      return { items, totalCount: response.data?.totalCount ?? items.length }
     }
 
     if (isDepartmentAdmin && user.departmentId) {
-      const response = await apiClient.getForms({ departmentId: user.departmentId })
-      return response.data?.items || []
+      const response = await apiClient.getForms({
+        departmentId: user.departmentId,
+        pageSize: 1000,
+      })
+      const items = response.data?.items || []
+      return { items, totalCount: response.data?.totalCount ?? items.length }
     }
 
-    const response = await apiClient.getForms({ createdBy: user.id })
-    return response.data?.items || []
+    const response = await apiClient.getForms({ createdBy: user.id, pageSize: 1000 })
+    const items = response.data?.items || []
+    return { items, totalCount: response.data?.totalCount ?? items.length }
   }, [isDepartmentAdmin, isSuperAdmin, user])
 
   const loadDashboardStats = useCallback(async () => {
@@ -95,13 +108,17 @@ export default function DashboardHomePage() {
     setError(null)
 
     try {
-      const [scopedUsers, scopedForms, departmentsResponse] = await Promise.all([
+      const [scopedUsersResult, scopedFormsResult, departmentsResponse] = await Promise.all([
         getScopedUsers(),
         getScopedForms(),
         apiClient.getDepartments({ pageSize: 200 }),
       ])
 
+      const scopedUsers = scopedUsersResult.items
+      const scopedForms = scopedFormsResult.items
+
       const departments = departmentsResponse.data?.items || []
+      const departmentsTotalCount = departmentsResponse.data?.totalCount ?? departments.length
       const departmentCodeMap = new Map<string, Department>(
         departments.map((department) => [department.id, department])
       )
@@ -156,9 +173,14 @@ export default function DashboardHomePage() {
         })
       )
 
+      const totalDepartmentsCount = isSuperAdmin
+        ? departmentsTotalCount
+        : departmentUserStats.length
+
       setStats({
-        userCount: scopedUsers.length,
-        formCount: scopedForms.length,
+        userCount: scopedUsersResult.totalCount,
+        formCount: scopedFormsResult.totalCount,
+        departmentCount: totalDepartmentsCount,
         departmentUserStats,
         formArchiveStats: formArchiveStats.sort((a, b) => b.archivedCount - a.archivedCount),
       })
@@ -169,7 +191,7 @@ export default function DashboardHomePage() {
     } finally {
       setIsLoading(false)
     }
-  }, [getScopedForms, getScopedUsers, user])
+  }, [getScopedForms, getScopedUsers, isSuperAdmin, user])
 
   useEffect(() => {
     loadDashboardStats()
@@ -201,7 +223,7 @@ export default function DashboardHomePage() {
     )
   }
 
-  const totalDepartments = stats.departmentUserStats.length
+  const totalDepartments = stats.departmentCount
   const totalArchivedDocuments = stats.formArchiveStats.reduce((sum, item) => sum + item.archivedCount, 0)
 
   return (

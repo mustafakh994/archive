@@ -13,6 +13,12 @@ services:
       - archive_pg_data:/var/lib/postgresql/data
     networks:
       - archive_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   archive-api:
     build:
@@ -21,10 +27,12 @@ services:
     container_name: archive-api
     restart: unless-stopped
     depends_on:
-      - archive-db
+      archive-db:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__DefaultConnection: Host=archive-db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      # Pooling + timeouts reduce burst DNS/TCP opens; retry policy is in Program.cs (Npgsql).
+      ConnectionStrings__DefaultConnection: Host=archive-db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Minimum Pool Size=2;Maximum Pool Size=80;Connection Idle Lifetime=120;Timeout=30;Command Timeout=120
       JwtSettings__SecretKey: ${JWT_SECRET}
       JwtSettings__Issuer: ${JWT_ISSUER}
       JwtSettings__Audience: ${JWT_AUDIENCE}

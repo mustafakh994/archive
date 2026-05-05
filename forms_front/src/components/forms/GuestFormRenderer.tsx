@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { Form } from '@/lib/api/client'
 import { Send, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import ScannerCaptureDialog from '@/components/forms/ScannerCaptureDialog'
 
 interface GuestFormRendererProps {
   form: Form
@@ -28,6 +29,52 @@ export default function GuestFormRenderer({ form, onSubmit, isSubmitting = false
   const [documentAttachments, setDocumentAttachments] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isValidating, setIsValidating] = useState(false)
+
+  const uploadFieldFile = async (fieldId: string, file: File) => {
+    const uploadFormData = new FormData()
+    uploadFormData.append('file', file)
+    uploadFormData.append('submissionId', `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+    uploadFormData.append('fieldId', fieldId)
+
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: uploadFormData
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Failed to upload file')
+    }
+
+    const result = await response.json()
+    handleInputChange(fieldId, result.url)
+  }
+
+  const uploadSystemAttachment = async (file: File) => {
+    const uploadFormData = new FormData()
+    uploadFormData.append('file', file)
+    uploadFormData.append('submissionId', `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+    uploadFormData.append('fieldId', 'system_attachments')
+
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: uploadFormData
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Failed to upload file')
+    }
+
+    const result = await response.json()
+    const url = typeof result.url === 'string' ? result.url : ''
+    if (url) {
+      setDocumentAttachments((prev) => [...prev, url])
+      if (errors['documentAttachments']) {
+        setErrors((prev: Record<string, string>) => ({ ...prev, documentAttachments: '' }))
+      }
+    }
+  }
 
   // Parse form schema to extract fields - keep original structure
   const parseFormFields = (): any[] => {
@@ -509,28 +556,8 @@ export default function GuestFormRenderer({ form, onSubmit, isSubmitting = false
                 onChange={async (e) => {
                   const file = e.target.files?.[0]
                   if (file) {
-                    // Upload to Cloudflare R2
                     try {
-                      const uploadFormData = new FormData()
-                      uploadFormData.append('file', file)
-                      uploadFormData.append('submissionId', `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
-                      uploadFormData.append('fieldId', field.id)
-
-                      const response = await fetch('/api/upload', {
-                        method: 'POST',
-                        body: uploadFormData
-                      })
-
-                      if (!response.ok) {
-                        const errorData = await response.json()
-                        throw new Error(errorData.error || 'Failed to upload file')
-                      }
-
-                      const result = await response.json()
-                      console.log('File uploaded to Cloudflare R2:', result)
-
-                      // Store the Cloudflare R2 URL in form data
-                      handleInputChange(field.id, result.url)
+                      await uploadFieldFile(field.id, file)
                     } catch (error) {
                       console.error('Error uploading file:', error)
                       const errorMessage = error instanceof Error ? error.message : 'فشل رفع الملف. يرجى المحاولة مرة أخرى.'
@@ -555,13 +582,19 @@ export default function GuestFormRenderer({ form, onSubmit, isSubmitting = false
                   ) : (
                     <>
                       <p className="mt-2 text-sm text-gray-900">اضغط لاختيار ملف أو اسحبه هنا</p>
-                      {props.maxFileSize && (
-                        <p className="text-xs text-gray-900 mt-1">الحد الأقصى: {props.maxFileSize} MB</p>
-                      )}
                     </>
                   )}
                 </div>
               </label>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <ScannerCaptureDialog
+                buttonText="مسح مباشر"
+                title="مسح مرفق الحقل"
+                onSave={async (file) => {
+                  await uploadFieldFile(field.id, file)
+                }}
+              />
             </div>
             {hasError && <p className="text-red-500 text-sm mt-1">{errors[field.id]}</p>}
           </div>
@@ -617,32 +650,9 @@ export default function GuestFormRenderer({ form, onSubmit, isSubmitting = false
               onChange={async (e: React.ChangeEvent<HTMLInputElement>) => {
                 const files = e.target.files
                 if (files && files.length > 0) {
-                  // Upload to Cloudflare R2 or local
                   try {
-                    const newAttachments = [...documentAttachments]
                     for (let i = 0; i < files.length; i++) {
-                      const file = files[i]
-                      const uploadFormData = new FormData()
-                      uploadFormData.append('file', file)
-                      uploadFormData.append('submissionId', `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
-                      uploadFormData.append('fieldId', 'system_attachments')
-
-                      const response = await fetch('/api/upload', {
-                        method: 'POST',
-                        body: uploadFormData
-                      })
-
-                      if (!response.ok) {
-                        const errorData = await response.json()
-                        throw new Error(errorData.error || 'Failed to upload file')
-                      }
-
-                      const result = await response.json()
-                      newAttachments.push(result.url)
-                    }
-                    setDocumentAttachments(newAttachments)
-                    if (errors['documentAttachments']) {
-                      setErrors((prev: Record<string, string>) => ({ ...prev, documentAttachments: '' }))
+                      await uploadSystemAttachment(files[i])
                     }
                   } catch (error) {
                     console.error('Error uploading file:', error)
@@ -664,6 +674,13 @@ export default function GuestFormRenderer({ form, onSubmit, isSubmitting = false
                 <p className="text-xs text-gray-500 mt-1">PDF, الصور, والمستندات</p>
               </div>
             </label>
+            <div className="mt-3 flex justify-end">
+              <ScannerCaptureDialog
+                onSave={async (file) => {
+                  await uploadSystemAttachment(file)
+                }}
+              />
+            </div>
 
             {/* List uploaded files */}
             {documentAttachments.length > 0 && (

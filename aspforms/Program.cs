@@ -102,7 +102,15 @@ if (string.IsNullOrEmpty(connectionString))
 }
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, npgsql =>
+    {
+        // Retries help when Docker DNS or new TCP connections briefly return EAGAIN
+        // ("Resource temporarily unavailable") under load or right after container start.
+        npgsql.EnableRetryOnFailure(
+            maxRetryCount: 6,
+            maxRetryDelay: TimeSpan.FromSeconds(12),
+            errorCodesToAdd: null);
+    }));
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(options =>

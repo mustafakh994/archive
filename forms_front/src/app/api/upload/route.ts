@@ -8,11 +8,11 @@ import { encryptAttachmentBuffer, isAttachmentEncryptionEnabled } from '@/lib/at
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
-    const file = formData.get('file') as File
+    const files = formData.getAll('file').filter((entry): entry is File => entry instanceof File)
     const submissionId = formData.get('submissionId') as string
     const fieldId = formData.get('fieldId') as string
 
-    if (!file) {
+    if (files.length === 0) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
@@ -46,30 +46,44 @@ export async function POST(request: NextRequest) {
       await mkdir(uploadDir, { recursive: true })
     }
 
-    // Keep human-readable name for UI/download only, but store encrypted bytes under an opaque name.
-    const originalName = file.name.replace(/[^a-zA-Z0-9._\u0600-\u06FF\-]/g, '_')
-    const timestamp = Date.now()
-    const storageName = `aenc_${timestamp}_${crypto.randomUUID().replace(/-/g, '')}.aenc`
-    const filePath = join(uploadDir, storageName)
+    const uploadedFiles = await Promise.all(
+      files.map(async (file) => {
+        // Keep human-readable name for UI/download only, but store encrypted bytes under an opaque name.
+        const originalName = file.name.replace(/[^a-zA-Z0-9._\u0600-\u06FF\-]/g, '_')
+        const timestamp = Date.now()
+        const storageName = `aenc_${timestamp}_${crypto.randomUUID().replace(/-/g, '')}.aenc`
+        const filePath = join(uploadDir, storageName)
 
-    const bytes = await file.arrayBuffer()
-    const plain = Buffer.from(bytes)
-    const toWrite = encryptAttachmentBuffer(plain)
+        const bytes = await file.arrayBuffer()
+        const plain = Buffer.from(bytes)
+        const toWrite = encryptAttachmentBuffer(plain)
 
-    await writeFile(filePath, toWrite)
+        await writeFile(filePath, toWrite)
 
-    // file = original display/download name, stored = encrypted blob filename on disk.
-    const url = `/api/attachments/download?submissionId=${encodeURIComponent(submissionId)}&file=${encodeURIComponent(originalName)}&stored=${encodeURIComponent(storageName)}`
+        // file = original display/download name, stored = encrypted blob filename on disk.
+        const url = `/api/attachments/download?submissionId=${encodeURIComponent(submissionId)}&file=${encodeURIComponent(originalName)}&stored=${encodeURIComponent(storageName)}`
 
-    console.log(`File saved (private, encrypted): ${filePath}`)
+        console.log(`File saved (private, encrypted): ${filePath}`)
 
+        return {
+          url,
+          filename: originalName,
+          storedFilename: storageName,
+          size: file.size,
+        }
+      })
+    )
+
+    const firstFile = uploadedFiles[0]
     return NextResponse.json({
       success: true,
-      url,
-      filename: originalName,
-      storedFilename: storageName,
-      size: file.size,
-      message: 'File uploaded successfully',
+      files: uploadedFiles,
+      // Backward compatibility for callers that still expect single-file fields.
+      url: firstFile?.url,
+      filename: firstFile?.filename,
+      storedFilename: firstFile?.storedFilename,
+      size: firstFile?.size,
+      message: uploadedFiles.length === 1 ? 'File uploaded successfully' : `${uploadedFiles.length} files uploaded successfully`,
     })
   } catch (error) {
     console.error('Upload error:', error)

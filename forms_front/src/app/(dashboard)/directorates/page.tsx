@@ -36,7 +36,7 @@ export default function DirectoratesPage() {
     }, [user, router])
 
     useEffect(() => {
-        fetchDepartments()
+        void fetchDepartments({ page: 1, pageSize: 500 })
     }, [fetchDepartments])
 
     // Form handlers
@@ -72,7 +72,7 @@ export default function DirectoratesPage() {
         setShowForm(false)
         setSelectedDepartment(null)
         // Refresh the list
-        fetchDepartments()
+        void fetchDepartments({ page: 1, pageSize: 500 })
     }
 
     const toggleActionMenu = (departmentId: string) => {
@@ -130,7 +130,7 @@ export default function DirectoratesPage() {
                     <h3 className="text-xl font-bold text-slate-900 mb-2">خطأ في التحميل</h3>
                     <p className="text-[15px] text-slate-600 mb-8" dir="rtl">{error}</p>
                     <button 
-                        onClick={() => fetchDepartments()}
+                        onClick={() => void fetchDepartments({ page: 1, pageSize: 500 })}
                         className="w-full px-5 py-3 text-white bg-slate-800 rounded-xl hover:bg-slate-900 transition-colors font-bold shadow-sm"
                         dir="rtl"
                     >

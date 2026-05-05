@@ -13,9 +13,13 @@ import {
   Mail,
   FileText,
   User,
-  Printer
+  Printer,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/store/useAuthStore'
+import { apiClient } from '@/lib/api/client'
+import { useSuccessToast, useErrorToast } from '@/components/ui/Toast'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import {
   isApiAttachmentDownloadUrl,
@@ -23,6 +27,7 @@ import {
   triggerBrowserDownload,
   openAttachmentInNewTabWithAuth,
 } from '@/lib/attachment-download-client'
+import { exportAttachmentImagesToPdf } from '@/lib/attachments-pdf-export'
 import { buildArchiveDocumentPlainText, extractArchiveDisplayFields } from '@/lib/archive-document-fields'
 import { ARCHIVE_QR_PRINT_PIXEL_SIZE, getArchiveQrImageUrl } from '@/lib/archive-document-qr'
 
@@ -260,7 +265,20 @@ function filterSearchableFormFields(fields: any[]): FormField[] {
 }
 
 export default function SubmissionsPage() {
-  const { token } = useAuthStore()
+  const { token, user } = useAuthStore()
+  const successToast = useSuccessToast()
+  const errorToast = useErrorToast()
+
+  // Only SuperAdmin / DepartmentAdmin can delete archived submissions.
+  // Role name comparison is case-insensitive because the backend accepts both
+  // "Superadmin"/"SuperAdmin" and "Departmentadmin"/"DepartmentAdmin".
+  const currentRoleName = (user?.roleName || user?.role?.name || '').toLowerCase()
+  const canDeleteSubmission =
+    currentRoleName === 'superadmin' || currentRoleName === 'departmentadmin'
+
+  const [submissionToDelete, setSubmissionToDelete] = useState<Submission | null>(null)
+  const [isDeletingSubmission, setIsDeletingSubmission] = useState(false)
+
   const [submissions, setSubmissions] = useState<SubmissionsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -300,6 +318,7 @@ export default function SubmissionsPage() {
   const [qrEncodedPayload, setQrEncodedPayload] = useState('')
   const [qrPlainText, setQrPlainText] = useState('')
   const [qrUsesPublicLink, setQrUsesPublicLink] = useState(false)
+  const [isExportingAttachmentsPdf, setIsExportingAttachmentsPdf] = useState(false)
 
   // Helper to safely parse responseData
   const parseResponseData = (submission: any): Record<string, any> => {
@@ -941,6 +960,100 @@ export default function SubmissionsPage() {
     }).format(date)
   }
 
+  // Map backend HTTP status to a user-friendly Arabic error message.
+  const translateDeleteSubmissionError = (status: number | undefined, backendMessage?: string | null) => {
+    switch (status) {
+      case 401:
+        return 'انتهت صلاحية جلستك. يرجى تسجيل الدخول مرة أخرى.'
+      case 403:
+        if (backendMessage && /department/i.test(backendMessage)) {
+          return 'لا يمكنك حذف وثائق من خارج قسمك.'
+        }
+        return 'ليس لديك صلاحية لحذف هذه الوثيقة.'
+      case 404:
+        return 'الوثيقة المؤرشفة غير موجودة أو تم حذفها من قِبَل مستخدم آخر.'
+      case 400:
+        return 'حدث خطأ أثناء حذف الوثيقة. يرجى المحاولة مرة أخرى.'
+      default:
+        return backendMessage || 'حدث خطأ غير متوقع أثناء حذف الوثيقة.'
+    }
+  }
+
+  const confirmDeleteSubmission = async () => {
+    if (!submissionToDelete || isDeletingSubmission) return
+    if (!canDeleteSubmission) {
+      errorToast('غير مصرح', 'ليس لديك صلاحية لحذف هذه الوثيقة.')
+      return
+    }
+
+    setIsDeletingSubmission(true)
+    try {
+      const response = await apiClient.deleteDocumentSubmission(submissionToDelete.id)
+
+      if (response?.success) {
+        const deletedId = submissionToDelete.id
+        // Optimistically remove the deleted row from the visible list.
+        setSubmissions((prev) => {
+          if (!prev) return prev
+          const nextItems = prev.items.filter((s) => s.id !== deletedId)
+          return {
+            ...prev,
+            items: nextItems,
+            totalItems: Math.max(0, (prev.totalItems ?? 0) - 1),
+          }
+        })
+
+        // If we're viewing this submission in the details modal, close it.
+        setSelectedSubmission((current) => (current?.id === deletedId ? null : current))
+
+        successToast(
+          'تم حذف الوثيقة بنجاح',
+          response.message || 'تم حذف الوثيقة المؤرشفة وكل المرفقات المرتبطة بها.'
+        )
+
+        setSubmissionToDelete(null)
+
+        // Re-sync with the backend to get accurate pagination / totals.
+        void fetchSubmissions()
+      } else {
+        errorToast(
+          'فشل حذف الوثيقة',
+          response?.message || 'حدث خطأ أثناء حذف الوثيقة. يرجى المحاولة مرة أخرى.'
+        )
+      }
+    } catch (err: any) {
+      const status: number | undefined =
+        err?.statusCode ?? err?.status ?? err?.response?.status
+      const backendMessage: string | undefined =
+        err?.data?.message ?? err?.response?.data?.message ?? err?.message
+      errorToast('فشل حذف الوثيقة', translateDeleteSubmissionError(status, backendMessage))
+    } finally {
+      setIsDeletingSubmission(false)
+    }
+  }
+
+  const exportSelectedSubmissionAttachmentsPdf = async (mode: 'single' | 'separate') => {
+    if (!selectedSubmission) return
+    const data = parseResponseData(selectedSubmission)
+    const systemAttachments = Array.isArray(data['system_attachments'])
+      ? (data['system_attachments'].filter((v: unknown) => typeof v === 'string') as string[])
+      : []
+
+    setIsExportingAttachmentsPdf(true)
+    try {
+      await exportAttachmentImagesToPdf(
+        systemAttachments,
+        mode,
+        token,
+        `submission-${selectedSubmission.id}-attachments`
+      )
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'فشل تصدير المرفقات كـ PDF')
+    } finally {
+      setIsExportingAttachmentsPdf(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1353,6 +1466,17 @@ export default function SubmissionsPage() {
                                 <Printer size={14} />
                                 طباعة QR
                               </button>
+                              {canDeleteSubmission && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSubmissionToDelete(submission)}
+                                  className="text-red-600 hover:text-red-800 flex items-center gap-1"
+                                  title="حذف الوثيقة المؤرشفة"
+                                >
+                                  <Trash2 size={14} />
+                                  حذف
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1613,12 +1737,38 @@ export default function SubmissionsPage() {
 
                 return (
                   <div className="mt-6 bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
-                    <h5 className="text-[16px] font-black text-slate-900 mb-4 flex items-center gap-2">
-                      <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-md">
-                        <Download size={18} strokeWidth={2.5} />
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <h5 className="text-[16px] font-black text-slate-900 flex items-center gap-2">
+                        <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-md">
+                          <Download size={18} strokeWidth={2.5} />
+                        </div>
+                        الملفات المرفقة بالوثيقة ({systemAttachments.length})
+                      </h5>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={isExportingAttachmentsPdf}
+                          onClick={() => {
+                            void exportSelectedSubmissionAttachmentsPdf('single')
+                          }}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <FileText size={14} />
+                          صور في PDF واحد
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isExportingAttachmentsPdf}
+                          onClick={() => {
+                            void exportSelectedSubmissionAttachmentsPdf('separate')
+                          }}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <FileText size={14} />
+                          كل صورة PDF منفصل
+                        </button>
                       </div>
-                      الملفات المرفقة بالوثيقة ({systemAttachments.length})
-                    </h5>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {systemAttachments.map((url: string, idx: number) => {
                         const fileName = attachmentDisplayName(url)
@@ -1689,6 +1839,93 @@ export default function SubmissionsPage() {
                 dir="rtl"
               >
                 إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {submissionToDelete && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4"
+          dir="rtl"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center gap-3">
+              <div className="bg-red-100 text-red-600 p-2.5 rounded-full">
+                <AlertTriangle size={22} strokeWidth={2.5} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">تأكيد حذف الوثيقة المؤرشفة</h3>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                سيتم حذف هذه الوثيقة وكل المرفقات المرتبطة بها{' '}
+                <span className="font-bold text-red-600">نهائياً</span>. لا يمكن التراجع عن هذه العملية.
+              </p>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm space-y-2">
+                {(() => {
+                  const data = parseResponseData(submissionToDelete)
+                  const documentNumber =
+                    data['system_documentNumber'] || data['document_number'] || '—'
+                  return (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-gray-500 font-semibold">رقم الوثيقة</span>
+                        <span className="font-bold text-indigo-700">{documentNumber}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-gray-500 font-semibold">القالب</span>
+                        <span className="font-semibold text-gray-900 truncate max-w-[200px]" title={submissionToDelete.formName}>
+                          {submissionToDelete.formName}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-gray-500 font-semibold">تاريخ الإرسال</span>
+                        <span className="font-semibold text-gray-900">
+                          {formatDate(submissionToDelete.submittedAt)}
+                        </span>
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+
+              <p className="text-xs text-gray-500 leading-relaxed">
+                هل أنت متأكد من رغبتك بحذف هذه الوثيقة؟
+              </p>
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isDeletingSubmission) setSubmissionToDelete(null)
+                }}
+                disabled={isDeletingSubmission}
+                className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteSubmission()}
+                disabled={isDeletingSubmission}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-bold shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isDeletingSubmission ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    <span>جاري الحذف...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} strokeWidth={2.5} />
+                    <span>نعم، احذف</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -18,6 +18,11 @@ public interface IFileService
     /// Get file information by ID
     /// </summary>
     Task<ApiResponse<FileInfoDto>> GetFileAsync(Guid fileId);
+
+    /// <summary>
+    /// Get file information by stored file name (legacy mobile compatibility).
+    /// </summary>
+    Task<ApiResponse<FileInfoDto>> GetFileByStoredNameAsync(string fileName);
     
     /// <summary>
     /// Get file bytes for download

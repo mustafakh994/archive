@@ -24,6 +24,8 @@ import {
   triggerBrowserDownload,
   openAttachmentInNewTabWithAuth,
 } from '@/lib/attachment-download-client'
+import { normalizeAttachmentUrl } from '@/lib/attachment-url'
+import { exportAttachmentImagesToPdf } from '@/lib/attachments-pdf-export'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import ExcelExportWizard from '@/components/forms/ExcelExportWizard'
 
@@ -106,6 +108,7 @@ function AdvancedSearchContent() {
 
   const [loadingForm, setLoadingForm] = useState(false)
   const [showExportWizard, setShowExportWizard] = useState(false)
+  const [isExportingAttachmentsPdf, setIsExportingAttachmentsPdf] = useState(false)
 
   // Filter and pagination state
   const [page, setPage] = useState(1)
@@ -355,13 +358,15 @@ function AdvancedSearchContent() {
 
     // Handle file upload fields
     if (field.type === 'file_upload') {
-      if (typeof value === 'string' && isApiAttachmentDownloadUrl(value)) {
+      const resolvedValue = typeof value === 'string' ? normalizeAttachmentUrl(value) : value
+
+      if (typeof resolvedValue === 'string' && isApiAttachmentDownloadUrl(resolvedValue)) {
         return (
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => {
-                void openAttachmentInNewTabWithAuth(value, token).catch((e) =>
+                void openAttachmentInNewTabWithAuth(resolvedValue, token).catch((e) =>
                   alert(e instanceof Error ? e.message : 'فشل العرض')
                 )
               }}
@@ -372,7 +377,7 @@ function AdvancedSearchContent() {
             <button
               type="button"
               onClick={() => {
-                void fetchAttachmentWithAuth(value, token)
+                void fetchAttachmentWithAuth(resolvedValue, token)
                   .then(({ blob, filename }) => triggerBrowserDownload(blob, filename))
                   .catch((e) => alert(e instanceof Error ? e.message : 'فشل التحميل'))
               }}
@@ -384,7 +389,7 @@ function AdvancedSearchContent() {
         )
       }
       // Check if it's a URL (Cloudflare R2 or other)
-      if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/uploads/'))) {
+      if (typeof resolvedValue === 'string' && (resolvedValue.startsWith('http') || resolvedValue.startsWith('/uploads/'))) {
         const getFileExtension = (url: string): string => {
           try {
             if (url.startsWith('http')) {
@@ -415,7 +420,7 @@ function AdvancedSearchContent() {
           return 'file'
         }
 
-        const fileType = getFileType(value)
+        const fileType = getFileType(resolvedValue)
 
         switch (fileType) {
           case 'image':
@@ -423,7 +428,7 @@ function AdvancedSearchContent() {
               <div className="mt-2">
                 <div className="relative inline-block">
                   <img
-                    src={value}
+                    src={resolvedValue}
                     alt={field.properties.label}
                     className="max-w-full max-h-96 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
                     onError={(e) => {
@@ -432,7 +437,7 @@ function AdvancedSearchContent() {
                   />
                 </div>
                 <a
-                  href={value}
+                  href={resolvedValue}
                   download
                   className="inline-flex items-center mt-2 text-sm text-purple-600 hover:text-purple-800"
                 >
@@ -456,7 +461,7 @@ function AdvancedSearchContent() {
                     <p className="text-xs text-red-600">Click to download</p>
                   </div>
                   <a
-                    href={value}
+                    href={resolvedValue}
                     download
                     className="inline-flex items-center px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
                   >
@@ -481,7 +486,7 @@ function AdvancedSearchContent() {
                     <p className="text-xs text-gray-600">Click to download</p>
                   </div>
                   <a
-                    href={value}
+                    href={resolvedValue}
                     download
                     className="inline-flex items-center px-3 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
                   >
@@ -574,6 +579,30 @@ function AdvancedSearchContent() {
       hour: '2-digit',
       minute: '2-digit'
     }).format(date)
+  }
+
+  const exportSelectedSubmissionAttachmentsPdf = async (mode: 'single' | 'separate') => {
+    if (!selectedSubmission) return
+    const data = parseResponseData(selectedSubmission)
+    const systemAttachments = Array.isArray(data['system_attachments'])
+      ? (data['system_attachments']
+          .filter((v: unknown) => typeof v === 'string')
+          .map((v) => normalizeAttachmentUrl(v as string)) as string[])
+      : []
+
+    setIsExportingAttachmentsPdf(true)
+    try {
+      await exportAttachmentImagesToPdf(
+        systemAttachments,
+        mode,
+        token,
+        `submission-${selectedSubmission.id}-attachments`
+      )
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'فشل تصدير المرفقات كـ PDF')
+    } finally {
+      setIsExportingAttachmentsPdf(false)
+    }
   }
 
   return (
@@ -778,11 +807,11 @@ function AdvancedSearchContent() {
                           value.toLowerCase().includes('.jpg') ||
                           value.toLowerCase().includes('.png')
                         )) {
-                          attachments.push({ key, url: value })
+                          attachments.push({ key, url: normalizeAttachmentUrl(value) })
                         } else if (key === 'system_attachments' && Array.isArray(value)) {
                           value.forEach((url, idx) => {
                             if (typeof url === 'string') {
-                              attachments.push({ key: `Attachment ${idx + 1}`, url })
+                              attachments.push({ key: `Attachment ${idx + 1}`, url: normalizeAttachmentUrl(url) })
                             }
                           })
                         }
@@ -1003,16 +1032,43 @@ function AdvancedSearchContent() {
                       {/* System Attachments */}
                       {data['system_attachments'] && Array.isArray(data['system_attachments']) && data['system_attachments'].length > 0 && (
                         <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm">
-                          <h5 className="text-[16px] font-black text-slate-900 mb-4 flex items-center gap-2">
-                            <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-md">
-                              <Download size={18} strokeWidth={2.5} />
+                          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <h5 className="text-[16px] font-black text-slate-900 flex items-center gap-2">
+                              <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-md">
+                                <Download size={18} strokeWidth={2.5} />
+                              </div>
+                              الملفات المرفقة بالوثيقة ({data['system_attachments'].length})
+                            </h5>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={isExportingAttachmentsPdf}
+                                onClick={() => {
+                                  void exportSelectedSubmissionAttachmentsPdf('single')
+                                }}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <FileText size={14} />
+                                صور في PDF واحد
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isExportingAttachmentsPdf}
+                                onClick={() => {
+                                  void exportSelectedSubmissionAttachmentsPdf('separate')
+                                }}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <FileText size={14} />
+                                كل صورة PDF منفصل
+                              </button>
                             </div>
-                            الملفات المرفقة بالوثيقة ({data['system_attachments'].length})
-                          </h5>
+                          </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {data['system_attachments'].map((url: string, idx: number) => {
-                              const fileName = attachmentDisplayName(url)
-                              const needsAuth = isApiAttachmentDownloadUrl(url)
+                              const resolvedUrl = normalizeAttachmentUrl(url)
+                              const fileName = attachmentDisplayName(resolvedUrl)
+                              const needsAuth = isApiAttachmentDownloadUrl(resolvedUrl)
                               return (
                                 <div key={idx} className="flex items-center justify-between bg-slate-50/50 p-3.5 rounded-xl border border-slate-200/60 hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors group">
                                     <div className="flex items-center gap-3 overflow-hidden ml-2">
@@ -1029,7 +1085,7 @@ function AdvancedSearchContent() {
                                               title="عرض"
                                               className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm"
                                               onClick={() => {
-                                                void openAttachmentInNewTabWithAuth(url, token).catch((e) =>
+                                                void openAttachmentInNewTabWithAuth(resolvedUrl, token).catch((e) =>
                                                   alert(e instanceof Error ? e.message : 'فشل العرض')
                                                 )
                                               }}
@@ -1041,7 +1097,7 @@ function AdvancedSearchContent() {
                                               title="تحميل"
                                               className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm"
                                               onClick={() => {
-                                                void fetchAttachmentWithAuth(url, token)
+                                                void fetchAttachmentWithAuth(resolvedUrl, token)
                                                   .then(({ blob, filename }) => triggerBrowserDownload(blob, filename))
                                                   .catch((e) => alert(e instanceof Error ? e.message : 'فشل التحميل'))
                                               }}
@@ -1051,10 +1107,10 @@ function AdvancedSearchContent() {
                                           </>
                                         ) : (
                                           <>
-                                            <a href={url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm" title="عرض">
+                                            <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm" title="عرض">
                                                 <Eye size={16} strokeWidth={2.5} />
                                             </a>
-                                            <a href={url} download className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm" title="تحميل">
+                                            <a href={resolvedUrl} download className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm" title="تحميل">
                                                 <Download size={16} strokeWidth={2.5} />
                                             </a>
                                           </>

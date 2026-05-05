@@ -55,8 +55,9 @@ export const useRoleStore = create<RoleState & RoleActions>((set, get) => ({
       const response = await apiClient.getRoles(params)
 
       if (response.success && response.data) {
-        // Handle paginated response - extract items array
-        const rolesArray = response.data.items || []
+        // PagedResult: camelCase items, or PascalCase Items from some gateways
+        const page = response.data as { items?: Role[]; Items?: Role[] }
+        const rolesArray = page.items ?? page.Items ?? []
         set({
           roles: rolesArray,
           filteredRoles: rolesArray,

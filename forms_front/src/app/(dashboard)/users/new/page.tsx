@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Save, X, Eye, EyeOff, User, Mail, Lock, Building, Shield } from 'lucide-react'
 import { useUserStore } from '@/lib/store/useUserStore'
@@ -10,11 +10,13 @@ import { useAuthStore } from '@/lib/store/useAuthStore'
 import { useSuccessToast, useErrorToast } from '@/components/ui/Toast'
 import { LoadingButton } from '@/components/ui/LoadingSpinner'
 import { CreateUserData } from '@/lib/api/client'
+import { isDepartmentAdminUser, isSuperAdminUser } from '@/lib/role-utils'
 
 export default function NewUserPage() {
   const router = useRouter()
   const { createUser, isLoading, error, clearError } = useUserStore()
   const { departments, fetchDepartments } = useDepartmentStore()
+  const { roles: departmentRoles, fetchRoles, isLoading: rolesLoading, error: rolesFetchError } = useRoleStore()
   const { user: currentUser } = useAuthStore()
   
   const successToast = useSuccessToast()
@@ -33,10 +35,18 @@ export default function NewUserPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
 
-  // Load departments on component mount
+  // Load departments on component mount (large page size so new departments appear in the dropdown)
   useEffect(() => {
-    fetchDepartments()
+    void fetchDepartments({ page: 1, pageSize: 500 })
   }, [fetchDepartments])
+
+  // Load roles for the selected department (includes مؤرشف / Archivist — scoped per department on the API)
+  useEffect(() => {
+    if (!formData.departmentId) {
+      return
+    }
+    void fetchRoles({ departmentId: formData.departmentId })
+  }, [formData.departmentId, fetchRoles])
 
   // Clear errors when form data changes
   useEffect(() => {
@@ -46,10 +56,10 @@ export default function NewUserPage() {
     setValidationErrors({})
   }, [formData, error, clearError])
 
-  // Check permissions - only SuperAdmin can create users
+  // SuperAdmin or DepartmentAdmin (same department enforced in form / API)
   useEffect(() => {
-    const userRole = currentUser?.role?.name
-    if (!userRole || userRole !== 'SuperAdmin') {
+    if (!currentUser) return
+    if (!isSuperAdminUser(currentUser) && !isDepartmentAdminUser(currentUser)) {
       errorToast('غير مصرح', 'ليس لديك صلاحية لإنشاء مستخدمين جدد')
       router.push('/dashboard')
     }
@@ -141,42 +151,61 @@ export default function NewUserPage() {
     router.push('/users')
   }
 
-  // Define system role IDs
-  const ROLE_IDS = {
-    DEPARTMENT_ADMIN: '30000000-0000-0000-0000-000000000002',
-    SUPER_ADMIN: '30000000-0000-0000-0000-000000000003'
-  }
+  const superAdmin = isSuperAdminUser(currentUser)
 
-  // Get available roles based on logged-in user's role
-  const getAvailableRoles = () => {
-    const isSuperAdmin = currentUser?.role?.name === 'SuperAdmin' || currentUser?.roleName === 'SuperAdmin'
+  /** Normalize GUID strings — API vs <select> can differ in letter case and break strict equality. */
+  const sameGuid = (a: string | undefined, b: string | undefined) =>
+    (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
 
-    if (isSuperAdmin) {
-      // SuperAdmin can assign both DepartmentAdmin and SuperAdmin roles
-      return [
-        { id: ROLE_IDS.DEPARTMENT_ADMIN, name: 'DepartmentAdmin', displayName: 'مدير القسم' },
-        { id: ROLE_IDS.SUPER_ADMIN, name: 'SuperAdmin', displayName: 'مدير النظام' }
-      ]
+  /** Roles returned by GET /Roles/department/{id} for the chosen department (correct Archivist id per department). */
+  const availableRoles = useMemo(() => {
+    if ((!superAdmin && !isDepartmentAdminUser(currentUser)) || !formData.departmentId) {
+      return []
     }
-
-    return []
-  }
-
-  const availableRoles = getAvailableRoles()
+    return [...departmentRoles]
+      .filter((r) => {
+        const rid =
+          r.departmentId ??
+          (r as { DepartmentId?: string }).DepartmentId
+        return r.isActive && sameGuid(rid, formData.departmentId)
+      })
+      .sort((a, b) => {
+        const order = (name: string) => {
+          const n = name.toLowerCase()
+          if (n === 'superadmin') return 0
+          if (n === 'departmentadmin') return 1
+          if (n === 'archivist') return 2
+          return 3
+        }
+        const diff = order(a.name) - order(b.name)
+        if (diff !== 0) return diff
+        return (a.displayName || a.name).localeCompare(b.displayName || b.name, 'ar')
+      })
+  }, [superAdmin, currentUser, formData.departmentId, departmentRoles])
 
   // Get available departments based on logged-in user's role
   const getAvailableDepartments = () => {
-    const isSuperAdmin = currentUser?.role?.name === 'SuperAdmin' || currentUser?.roleName === 'SuperAdmin'
-
-    if (isSuperAdmin) {
-      // SuperAdmin can see all departments
+    if (superAdmin) {
       return departments
     }
-
+    if (isDepartmentAdminUser(currentUser) && currentUser?.departmentId) {
+      return departments.filter((d) => d.id === currentUser.departmentId)
+    }
     return []
   }
 
   const availableDepartments = getAvailableDepartments()
+
+  // Department admin: lock department to their own
+  useEffect(() => {
+    if (isDepartmentAdminUser(currentUser) && currentUser?.departmentId) {
+      setFormData((prev) =>
+        prev.departmentId === currentUser.departmentId
+          ? prev
+          : { ...prev, departmentId: currentUser.departmentId!, roleId: '' }
+      )
+    }
+  }, [currentUser])
 
   return (
     <div className="max-w-4xl mx-auto py-6 animate-in fade-in duration-500" dir="rtl">
@@ -380,19 +409,35 @@ export default function NewUserPage() {
                   <select
                     value={formData.roleId}
                     onChange={(e) => handleInputChange('roleId', e.target.value)}
-                    className={`w-full px-4 py-3.5 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 font-bold bg-white transition-colors shadow-sm appearance-none ${
+                    disabled={!formData.departmentId || rolesLoading}
+                    className={`w-full px-4 py-3.5 border rounded-xl focus:outline-none focus:ring-4 focus:ring-indigo-500/20 font-bold bg-white transition-colors shadow-sm appearance-none disabled:opacity-60 disabled:cursor-not-allowed ${
                         formData.roleId ? 'text-slate-900' : 'text-slate-400'
                     } ${
                       validationErrors.roleId ? 'border-rose-500 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500 hover:border-slate-300'
                     }`}
                   >
-                    <option value="" disabled>تحديد مستوى الوصول</option>
+                    <option value="" disabled>
+                      {!formData.departmentId
+                        ? 'اختر المديرية أولاً'
+                        : rolesLoading
+                          ? 'جاري تحميل الأدوار…'
+                          : rolesFetchError
+                            ? `تعذر تحميل الأدوار: ${rolesFetchError}`
+                            : availableRoles.length === 0
+                              ? 'لا توجد أدوار لهذه المديرية'
+                              : 'تحديد مستوى الوصول'}
+                    </option>
                     {availableRoles.map((role) => (
                       <option key={role.id} value={role.id} className="text-slate-900 font-medium">
                         {role.displayName || role.name}
                       </option>
                     ))}
                   </select>
+                  {formData.departmentId && !rolesLoading && availableRoles.length > 0 && (
+                    <p className="mt-2 text-[12px] text-slate-500">
+                      يتضمن دور <span className="font-bold text-slate-700">مؤرشف</span> عندما تكون المديرية المختارة تحتويه في النظام.
+                    </p>
+                  )}
                   {validationErrors.roleId && (
                     <p className="mt-2 text-[13px] font-bold text-rose-600 flex items-center gap-1"><X size={14} />{validationErrors.roleId}</p>
                   )}

@@ -5,6 +5,7 @@ import { FileText, Users, Building, Settings, PlusCircle, ClipboardList, LogOut,
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store/useAuthStore'
+import { canAccessNewFormBuilder, isDepartmentAdminUser, isSuperAdminUser } from '@/lib/role-utils'
 
 export default function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
     const pathname = usePathname()
@@ -16,28 +17,29 @@ export default function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
         router.push('/login')
     }
 
-    // Check if user is SuperAdmin
-    const isSuperAdmin = user?.role?.name === 'SuperAdmin' || user?.roleName === 'SuperAdmin'
+    const isSuperAdmin = isSuperAdminUser(user)
+    const showNewFormLink = canAccessNewFormBuilder(user)
 
     // Base navigation items (visible to all authenticated users)
     const baseNavItems = [
         { label: 'الرئيسية', href: '/dashboard', icon: LayoutDashboard },
         { label: 'قوالب الوثائق', href: '/forms', icon: FileText },
-        { label: 'إنشاء قالب جديد', href: '/forms/new', icon: PlusCircle },
+        ...(showNewFormLink ? [{ label: 'إنشاء قالب جديد', href: '/forms/new', icon: PlusCircle }] as const : []),
         { label: 'جميع الوثائق المؤرشفة', href: '/submissions', icon: Inbox },
         { label: 'البحث المتقدم', href: '/responses', icon: FileSpreadsheet },
     ]
 
-    // SuperAdmin-only items
-    const superAdminItems = [
-        { label: 'إدارة المستخدمين', href: '/users', icon: Users },
-        { href: '/directorates', label: 'المديريات', icon: Building },
-    ]
+    // SuperAdmin: all directorates. DepartmentAdmin: users in their department only (same /users route).
+    const adminNavItems = isSuperAdmin
+        ? ([
+            { label: 'إدارة المستخدمين', href: '/users', icon: Users },
+            { href: '/directorates', label: 'المديريات', icon: Building },
+          ] as const)
+        : isDepartmentAdminUser(user)
+            ? ([{ label: 'إدارة المستخدمين', href: '/users', icon: Users }] as const)
+            : ([] as const)
 
-    // Combine nav items based on role
-    const navItems = isSuperAdmin
-        ? [...baseNavItems, ...superAdminItems]
-        : baseNavItems
+    const navItems = [...baseNavItems, ...adminNavItems]
 
     return (
         <aside className={`flex-shrink-0 bg-white border-r border-slate-200 flex flex-col transition-all duration-300 ease-in-out shadow-sm ${isCollapsed ? 'w-20' : 'w-72'}`}>

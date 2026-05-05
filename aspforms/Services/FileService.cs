@@ -164,6 +164,45 @@ public class FileService : IFileService
         }
     }
 
+    public async Task<ApiResponse<FileInfoDto>> GetFileByStoredNameAsync(string fileName)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return ApiResponse<FileInfoDto>.ErrorResponse("File name is required.");
+            }
+
+            var normalized = Path.GetFileName(fileName);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return ApiResponse<FileInfoDto>.ErrorResponse("Invalid file name.");
+            }
+
+            var file = await _context.FileAttachments
+                .Include(f => f.Uploader)
+                .Include(f => f.Department)
+                .Where(f => !f.IsDeleted && f.FileName == normalized)
+                .OrderByDescending(f => f.UploadedAt)
+                .FirstOrDefaultAsync();
+
+            if (file == null)
+            {
+                return ApiResponse<FileInfoDto>.ErrorResponse("File not found.");
+            }
+
+            var fileDto = _mapper.Map<FileInfoDto>(file);
+            fileDto.DownloadUrl = $"/api/files/download/{file.Id}";
+
+            return ApiResponse<FileInfoDto>.SuccessResponse(fileDto, "File information retrieved successfully.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting file by stored name {FileName}", fileName);
+            return ApiResponse<FileInfoDto>.ErrorResponse($"An error occurred while retrieving file information: {ex.Message}");
+        }
+    }
+
     public async Task<byte[]?> GetFileBytesAsync(string filePath)
     {
         try

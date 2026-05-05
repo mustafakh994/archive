@@ -7,6 +7,7 @@ import { useAuthStore } from '@/lib/store/useAuthStore'
 import { useSuccessToast, useErrorToast } from '@/components/ui/Toast'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import { apiClient } from '@/lib/api/client'
+import { canAccessNewFormBuilder, isSuperAdminUser } from '@/lib/role-utils'
 
 export default function NewFormPage() {
   const router = useRouter()
@@ -15,6 +16,7 @@ export default function NewFormPage() {
   const successToast = useSuccessToast()
   const errorToast = useErrorToast()
   const hasCreatedForm = useRef(false)
+  const [accessDenied, setAccessDenied] = useState(false)
 
   // SuperAdmin department selection
   const [showDepartmentSelector, setShowDepartmentSelector] = useState(false)
@@ -28,10 +30,12 @@ export default function NewFormPage() {
       return
     }
 
-    // Check if user is SuperAdmin
-    const isSuperAdmin = user.role?.name === 'SuperAdmin' ||
-      user.roleName === 'SuperAdmin' ||
-      user.permissions?.some(p => p.name === 'SuperAdmin')
+    if (!canAccessNewFormBuilder(user)) {
+      setAccessDenied(true)
+      return
+    }
+
+    const isSuperAdmin = isSuperAdminUser(user)
 
     if (isSuperAdmin && !showDepartmentSelector && !hasCreatedForm.current) {
       // Show department selector for SuperAdmin
@@ -117,6 +121,29 @@ export default function NewFormPage() {
       createNewForm()
     }
   }, [user, router, successToast, errorToast, selectedDepartmentId, showDepartmentSelector]) // Added dependencies
+
+  if (accessDenied) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in px-4">
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-amber-100 p-8 max-w-lg w-full text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1 bg-amber-500" />
+          <h3 className="text-xl font-black text-slate-900 mb-3" dir="rtl">لا يمكن إنشاء قالب جديد</h3>
+          <p className="text-[15px] text-slate-600 mb-6 leading-relaxed" dir="rtl">
+            دور <span className="font-bold">مؤرشف</span> لا يتضمن إنشاء قوالب جديدة افتراضياً. يمنح مدير القسم أو مدير النظام
+            صلاحية فردية &quot;إنشاء قالب&quot; من صفحة المستخدم عند الحاجة.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/forms')}
+            className="w-full px-5 py-3 text-white bg-slate-800 rounded-xl hover:bg-slate-900 transition-colors font-bold shadow-sm"
+            dir="rtl"
+          >
+            العودة إلى قوالب الوثائق
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // Show department selector for SuperAdmin
   if (showDepartmentSelector && !selectedDepartmentId) {

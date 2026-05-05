@@ -128,6 +128,38 @@ public class FilesController : ControllerBase
     }
 
     /// <summary>
+    /// Download a file by stored filename (legacy mobile compatibility).
+    /// </summary>
+    [HttpGet("download/by-name/{fileName}")]
+    public async Task<IActionResult> DownloadFileByStoredName(string fileName)
+    {
+        try
+        {
+            var result = await _fileService.GetFileByStoredNameAsync(fileName);
+
+            if (!result.Success || result.Data == null)
+            {
+                return NotFound();
+            }
+
+            var fileInfo = result.Data;
+            var fileBytes = await _fileService.GetFileBytesAsync(fileInfo.FilePath);
+
+            if (fileBytes == null)
+            {
+                return NotFound();
+            }
+
+            return File(fileBytes, fileInfo.ContentType, fileInfo.OriginalFileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error downloading file by stored name {FileName}", fileName);
+            return StatusCode(500);
+        }
+    }
+
+    /// <summary>
     /// Get file information by ID
     /// </summary>
     [HttpGet("{fileId}")]

@@ -19,20 +19,12 @@ export const PUBLIC_URL = cloudflareR2Config.publicUrl
 
 // File validation
 const ALLOWED_FILE_TYPES = cloudflareR2Config.allowedFileTypes
-const MAX_FILE_SIZE = cloudflareR2Config.maxFileSize
 
 export function validateFile(file: File): { valid: boolean; error?: string } {
   if (!ALLOWED_FILE_TYPES.includes(file.type)) {
     return { 
       valid: false, 
       error: `File type ${file.type} is not allowed. Allowed types: ${ALLOWED_FILE_TYPES.join(', ')}` 
-    }
-  }
-  
-  if (file.size > MAX_FILE_SIZE) {
-    return { 
-      valid: false, 
-      error: `File size ${(file.size / 1024 / 1024).toFixed(2)}MB exceeds maximum allowed size of ${MAX_FILE_SIZE / 1024 / 1024}MB` 
     }
   }
   

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSubmissionStore } from '@/lib/store/useSubmissionStore'
 import { FormSubmission } from '@/lib/api/client'
+import { jsPDF } from 'jspdf'
 import { 
   X,
   Download,
@@ -21,6 +22,7 @@ import {
   triggerBrowserDownload,
   openAttachmentInNewTabWithAuth,
 } from '@/lib/attachment-download-client'
+import { normalizeAttachmentUrl } from '@/lib/attachment-url'
 
 interface SubmissionViewerProps {
   submissionId?: string
@@ -46,6 +48,7 @@ export default function SubmissionViewer({
 
   const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json')
   const [expandedImage, setExpandedImage] = useState<string | null>(null)
+  const [isExportingImagesPdf, setIsExportingImagesPdf] = useState(false)
 
   // Use prop submission or fetch from store
   const submission = propSubmission || currentSubmission
@@ -111,7 +114,9 @@ export default function SubmissionViewer({
   }
 
   const renderFilePreview = (url: string, fieldLabel: string): React.ReactNode => {
-    if (isApiAttachmentDownloadUrl(url)) {
+    const resolvedUrl = normalizeAttachmentUrl(url)
+
+    if (isApiAttachmentDownloadUrl(resolvedUrl)) {
       return (
         <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
           <p className="text-sm text-gray-600" dir="rtl">
@@ -121,7 +126,7 @@ export default function SubmissionViewer({
             <button
               type="button"
               onClick={() => {
-                void openAttachmentInNewTabWithAuth(url, token).catch((e) =>
+                void openAttachmentInNewTabWithAuth(resolvedUrl, token).catch((e) =>
                   alert(e instanceof Error ? e.message : 'فشل الفتح')
                 )
               }}
@@ -133,7 +138,7 @@ export default function SubmissionViewer({
             <button
               type="button"
               onClick={() => {
-                void fetchAttachmentWithAuth(url, token)
+                void fetchAttachmentWithAuth(resolvedUrl, token)
                   .then(({ blob, filename }) => triggerBrowserDownload(blob, filename))
                   .catch((e) => alert(e instanceof Error ? e.message : 'فشل التحميل'))
               }}
@@ -147,14 +152,15 @@ export default function SubmissionViewer({
       )
     }
 
-    const fileType = getFileType(url)
+    const fileType = getFileType(resolvedUrl)
     
     // Debug logging
     console.log('File preview debug:', {
       url,
+      resolvedUrl,
       fieldLabel,
       fileType,
-      extension: getFileExtension(url)
+      extension: getFileExtension(resolvedUrl)
     })
     
     switch (fileType) {
@@ -163,16 +169,16 @@ export default function SubmissionViewer({
           <div className="mt-2">
             <div className="relative inline-block">
               <img 
-                src={url} 
+                src={resolvedUrl}
                 alt={fieldLabel}
                 className="max-w-full max-h-96 rounded-lg border border-gray-200 shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setExpandedImage(url)}
+                onClick={() => setExpandedImage(resolvedUrl)}
                 onError={(e) => {
                   e.currentTarget.style.display = 'none'
                 }}
               />
               <button
-                onClick={() => setExpandedImage(url)}
+                onClick={() => setExpandedImage(resolvedUrl)}
                 className="absolute top-2 right-2 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full p-2 shadow-md transition-all"
                 title="Expand image"
               >
@@ -180,7 +186,7 @@ export default function SubmissionViewer({
               </button>
             </div>
             <a 
-              href={url} 
+              href={resolvedUrl}
               download
               className="inline-flex items-center mt-2 text-sm text-purple-600 hover:text-purple-800"
             >
@@ -195,7 +201,7 @@ export default function SubmissionViewer({
           <div className="mt-2 space-y-2">
             <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50">
               <iframe
-                src={url}
+                src={resolvedUrl}
                 className="w-full h-96"
                 title={`PDF: ${fieldLabel}`}
                 style={{ border: 'none' }}
@@ -218,7 +224,7 @@ export default function SubmissionViewer({
             </div>
             <div className="flex items-center gap-3">
               <a 
-                href={url} 
+                href={resolvedUrl}
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800"
@@ -227,7 +233,7 @@ export default function SubmissionViewer({
                 Open in new tab
               </a>
               <a 
-                href={url} 
+                href={resolvedUrl}
                 download
                 className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800"
               >
@@ -245,11 +251,11 @@ export default function SubmissionViewer({
               controls
               className="w-full max-h-96 rounded-lg border border-gray-200 bg-black"
             >
-              <source src={url} />
+              <source src={resolvedUrl} />
               Your browser does not support the video tag.
             </video>
             <a 
-              href={url} 
+              href={resolvedUrl}
               download
               className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800"
             >
@@ -266,11 +272,11 @@ export default function SubmissionViewer({
               controls
               className="w-full"
             >
-              <source src={url} />
+              <source src={resolvedUrl} />
               Your browser does not support the audio tag.
             </audio>
             <a 
-              href={url} 
+              href={resolvedUrl}
               download
               className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800"
             >
@@ -284,15 +290,15 @@ export default function SubmissionViewer({
       case 'other':
       default:
         // Check if this might be a PDF that wasn't detected properly
-        const ext = getFileExtension(url)
-        const isLikelyPdf = ext === 'pdf' || url.toLowerCase().includes('.pdf')
+        const ext = getFileExtension(resolvedUrl)
+        const isLikelyPdf = ext === 'pdf' || resolvedUrl.toLowerCase().includes('.pdf')
         
         if (isLikelyPdf) {
           return (
             <div className="mt-2 space-y-2">
               <div className="border border-gray-300 rounded-lg overflow-hidden bg-gray-50">
                 <iframe
-                  src={url}
+                  src={resolvedUrl}
                   className="w-full h-96"
                   title={`PDF: ${fieldLabel}`}
                   style={{ border: 'none' }}
@@ -315,7 +321,7 @@ export default function SubmissionViewer({
               </div>
               <div className="flex items-center gap-3">
                 <a 
-                  href={url} 
+                  href={resolvedUrl}
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800"
@@ -324,7 +330,7 @@ export default function SubmissionViewer({
                   Open in new tab
                 </a>
                 <a 
-                  href={url} 
+                  href={resolvedUrl}
                   download
                   className="inline-flex items-center text-sm text-purple-600 hover:text-purple-800"
                 >
@@ -341,15 +347,15 @@ export default function SubmissionViewer({
             <File className="h-8 w-8 text-gray-400" />
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-700">
-                {url.split('/').pop()?.substring(0, 50) || 'File'}
+                {resolvedUrl.split('/').pop()?.substring(0, 50) || 'File'}
               </p>
               <p className="text-xs text-gray-500">
-                {getFileExtension(url).toUpperCase()} file
+                {getFileExtension(resolvedUrl).toUpperCase()} file
               </p>
             </div>
             <div className="flex gap-2">
               <a 
-                href={url} 
+                href={resolvedUrl}
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="inline-flex items-center px-3 py-1.5 text-sm text-purple-600 hover:text-purple-800 border border-purple-300 rounded-md hover:bg-purple-50"
@@ -358,7 +364,7 @@ export default function SubmissionViewer({
                 Open
               </a>
               <a 
-                href={url} 
+                href={resolvedUrl}
                 download
                 className="inline-flex items-center px-3 py-1.5 text-sm text-purple-600 hover:text-purple-800 border border-purple-300 rounded-md hover:bg-purple-50"
               >
@@ -498,9 +504,9 @@ export default function SubmissionViewer({
       
       if (isR2Url || isFileUrl || isBase64Image) {
         // If it's base64 without proper prefix, add the prefix for image display
-        const displayUrl = isBase64Image && !value.startsWith('data:') 
+        const displayUrl = isBase64Image && !value.startsWith('data:')
           ? `data:image/png;base64,${value}` 
-          : value
+          : normalizeAttachmentUrl(value)
         
         console.log('Rendering as image:', { key, displayUrl: displayUrl.substring(0, 50) + '...' })
         return renderFilePreview(displayUrl, key)
@@ -508,6 +514,111 @@ export default function SubmissionViewer({
     }
 
     return <span className="whitespace-pre-wrap">{String(value)}</span>
+  }
+
+  const getImageUrlsFromResponseData = (responseData: Record<string, unknown>): string[] => {
+    const urls: string[] = []
+
+    const pushIfImage = (candidate: unknown) => {
+      if (typeof candidate !== 'string') return
+      const trimmed = normalizeAttachmentUrl(candidate.trim())
+      if (!trimmed) return
+      if (getFileType(trimmed) === 'image') {
+        urls.push(trimmed)
+      }
+    }
+
+    Object.values(responseData).forEach((value) => {
+      if (Array.isArray(value)) {
+        value.forEach(pushIfImage)
+        return
+      }
+      pushIfImage(value)
+    })
+
+    return urls
+  }
+
+  const blobToDataUrl = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result ?? ''))
+      reader.onerror = () => reject(new Error('Failed to read image data'))
+      reader.readAsDataURL(blob)
+    })
+  }
+
+  const getImageDimensions = (src: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height })
+      img.onerror = () => reject(new Error('Failed to load image for PDF export'))
+      img.src = src
+    })
+  }
+
+  const fetchImageDataForPdf = async (url: string): Promise<string> => {
+    const resolvedUrl = normalizeAttachmentUrl(url)
+    if (resolvedUrl.startsWith('data:image/')) {
+      return resolvedUrl
+    }
+    if (isApiAttachmentDownloadUrl(resolvedUrl)) {
+      const { blob } = await fetchAttachmentWithAuth(resolvedUrl, token)
+      return blobToDataUrl(blob)
+    }
+    const res = await fetch(resolvedUrl)
+    if (!res.ok) {
+      throw new Error(`Failed to fetch image (${res.status})`)
+    }
+    const blob = await res.blob()
+    return blobToDataUrl(blob)
+  }
+
+  const addImagePageToPdf = async (pdf: jsPDF, dataUrl: string): Promise<void> => {
+    const { width, height } = await getImageDimensions(dataUrl)
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const ratio = Math.min(pageWidth / width, pageHeight / height)
+    const renderWidth = width * ratio
+    const renderHeight = height * ratio
+    const x = (pageWidth - renderWidth) / 2
+    const y = (pageHeight - renderHeight) / 2
+    pdf.addImage(dataUrl, 'JPEG', x, y, renderWidth, renderHeight)
+  }
+
+  const exportAttachmentsAsPdf = async (mode: 'single' | 'separate') => {
+    if (!submission?.responseData || typeof submission.responseData !== 'object') return
+
+    const imageUrls = getImageUrlsFromResponseData(submission.responseData as Record<string, unknown>)
+    if (imageUrls.length === 0) {
+      alert('لا توجد صور مرفقة داخل هذا الرد.')
+      return
+    }
+
+    setIsExportingImagesPdf(true)
+    try {
+      const imageDataUrls = await Promise.all(imageUrls.map((url) => fetchImageDataForPdf(url)))
+      const baseName = `submission-${submission.id}-attachments`
+
+      if (mode === 'single') {
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+        for (let i = 0; i < imageDataUrls.length; i++) {
+          if (i > 0) pdf.addPage()
+          await addImagePageToPdf(pdf, imageDataUrls[i])
+        }
+        pdf.save(`${baseName}.pdf`)
+      } else {
+        for (let i = 0; i < imageDataUrls.length; i++) {
+          const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+          await addImagePageToPdf(pdf, imageDataUrls[i])
+          pdf.save(`${baseName}-${i + 1}.pdf`)
+        }
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'فشل إنشاء PDF للمرفقات')
+    } finally {
+      setIsExportingImagesPdf(false)
+    }
   }
 
   const exportSubmission = () => {
@@ -645,6 +756,26 @@ export default function SubmissionViewer({
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export
+                </button>
+                <button
+                  onClick={() => {
+                    void exportAttachmentsAsPdf('single')
+                  }}
+                  disabled={isExportingImagesPdf}
+                  className="inline-flex items-center px-3 py-2 border border-purple-300 shadow-sm text-sm leading-4 font-medium rounded-md text-purple-700 bg-white hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  {isExportingImagesPdf ? 'Processing...' : 'صور في PDF واحد'}
+                </button>
+                <button
+                  onClick={() => {
+                    void exportAttachmentsAsPdf('separate')
+                  }}
+                  disabled={isExportingImagesPdf}
+                  className="inline-flex items-center px-3 py-2 border border-purple-300 shadow-sm text-sm leading-4 font-medium rounded-md text-purple-700 bg-white hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  {isExportingImagesPdf ? 'Processing...' : 'كل صورة PDF منفصل'}
                 </button>
               </div>
             )}

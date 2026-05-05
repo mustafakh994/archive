@@ -8,6 +8,19 @@ interface UserFilters {
   roleId?: string
   isActive?: boolean
   search?: string
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortDescending?: boolean
+}
+
+export interface UserListPagination {
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
 }
 
 interface UserState {
@@ -19,6 +32,8 @@ interface UserState {
   error: string | null
   searchTerm: string
   filters: UserFilters
+  /** Server-side list pagination (GET /users) */
+  userListPagination: UserListPagination | null
 }
 
 interface UserActions {
@@ -47,6 +62,7 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
   error: null,
   searchTerm: '',
   filters: {},
+  userListPagination: null,
 
   // Actions
   fetchUsers: async (params) => {
@@ -56,17 +72,42 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
       const response = await apiClient.getUsers(params)
       
       if (response.success && response.data) {
-        // Handle paginated response - extract items array
-        const usersArray = response.data.items || []
+        const raw = response.data as {
+          items?: User[]
+          Items?: User[]
+          page?: number
+          pageSize?: number
+          totalItems?: number
+          totalCount?: number
+          totalPages?: number
+          hasNextPage?: boolean
+          hasPreviousPage?: boolean
+        }
+        const usersArray = raw.items ?? raw.Items ?? []
+        const page = raw.page ?? params?.page ?? 1
+        const pageSize = raw.pageSize ?? params?.pageSize ?? 10
+        const totalItems = raw.totalItems ?? raw.totalCount ?? usersArray.length
+        const totalPages = raw.totalPages ?? Math.max(1, Math.ceil(totalItems / pageSize))
+        const hasNextPage = raw.hasNextPage ?? page < totalPages
+        const hasPreviousPage = raw.hasPreviousPage ?? page > 1
+
         set({
           users: usersArray,
           filteredUsers: usersArray,
           isLoading: false,
           error: null,
-          filters: params || {},
+          filters: { ...(params || {}) },
+          userListPagination: {
+            page,
+            pageSize,
+            totalItems,
+            totalPages,
+            hasNextPage,
+            hasPreviousPage,
+          },
         })
         
-        // Apply current search term if exists
+        // Client-side search only filters the current page; prefer server search via fetchUsers({ search })
         const { searchTerm } = get()
         if (searchTerm) {
           get().searchUsers(searchTerm)
@@ -77,6 +118,7 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
           filteredUsers: [],
           isLoading: false,
           error: response.message || 'Failed to fetch users',
+          userListPagination: null,
         })
       }
     } catch (error) {
@@ -86,6 +128,7 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
         filteredUsers: [],
         isLoading: false,
         error: error instanceof Error ? error.message : 'Network error',
+        userListPagination: null,
       })
     }
   },
@@ -123,13 +166,13 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
       const response = await apiClient.createUser(data)
       
       if (response.success && response.data) {
-        const { users, filteredUsers } = get()
-        const newUsers = [...users, response.data]
-        set({
-          users: newUsers,
-          filteredUsers: [...filteredUsers, response.data],
-          isLoading: false,
-          error: null,
+        const { filters, userListPagination } = get()
+        const pageSize = userListPagination?.pageSize ?? 10
+        set({ isLoading: false, error: null })
+        await get().fetchUsers({
+          ...filters,
+          page: 1,
+          pageSize,
         })
         return true
       } else {
@@ -293,7 +336,8 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
       currentUser: null,
       searchTerm: '',
       filters: {},
-      error: null
+      error: null,
+      userListPagination: null,
     })
   },
 }))

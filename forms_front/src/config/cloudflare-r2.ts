@@ -15,7 +15,6 @@ export const cloudflareR2Config = {
   publicUrl: process.env.CLOUDFLARE_R2_PUBLIC_URL || 'https://pub-0be9bcd1f0c541b28f464584250977b3.r2.dev',
   
   // File Upload Settings
-  maxFileSize: 10 * 1024 * 1024, // 10MB
   allowedFileTypes: [
     'application/pdf',
     'image/jpeg',
@@ -53,7 +52,6 @@ export const {
   secretAccessKey,
   bucketName,
   publicUrl,
-  maxFileSize,
   allowedFileTypes,
   endpoint,
   isValid

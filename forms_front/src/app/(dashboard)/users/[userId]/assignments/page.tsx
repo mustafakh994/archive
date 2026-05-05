@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Briefcase, PlusCircle, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
+import { ArrowRight, Briefcase, PlusCircle, Trash2, ToggleLeft, ToggleRight, User } from 'lucide-react'
 import { apiClient, Assignment, Role, Department } from '@/lib/api/client'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import { useSuccessToast, useErrorToast } from '@/components/ui/Toast'

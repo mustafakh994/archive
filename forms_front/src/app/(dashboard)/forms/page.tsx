@@ -6,6 +6,7 @@ import { useFormStore } from '@/lib/store/useFormStore'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import Link from 'next/link'
 import { TableDate } from '@/components/ui/DateDisplay'
+import { canAccessNewFormBuilder, isArchivistUser, isDepartmentAdminUser } from '@/lib/role-utils'
 
 export default function FormsListPage() {
     const {
@@ -25,24 +26,19 @@ export default function FormsListPage() {
 
     useEffect(() => {
         if (user) {
-            // Check user role
             const userRole = user.role?.name || user.roleName
 
             if (userRole === 'SuperAdmin') {
-                // SuperAdmin sees all forms across all departments - no filters
-                console.log('User is SuperAdmin - fetching all forms without filters')
                 fetchForms()
-            } else if (userRole === 'DepartmentAdmin') {
-                // DepartmentAdmin sees all forms in their department - API will filter automatically
-                console.log('User is DepartmentAdmin - fetching department forms (API will filter)')
+            } else if (isDepartmentAdminUser(user)) {
+                fetchForms()
+            } else if (isArchivistUser(user)) {
+                // Backend lists assigned templates (+ created ones if CreateFormTemplate granted)
                 fetchForms()
             } else {
-                // Other users see only their forms
-                console.log('Regular user - filtering by createdBy')
                 fetchForms({ createdBy: user.id })
             }
         } else {
-            // If no user, try to fetch all forms (this might fail if API requires auth)
             fetchForms()
         }
     }, [user, fetchForms])
@@ -53,12 +49,10 @@ export default function FormsListPage() {
 
         const userRole = user.role?.name || user.roleName
 
-        if (userRole === 'SuperAdmin' || userRole === 'DepartmentAdmin') {
-            // SuperAdmin and DepartmentAdmin - no client-side filtering (API handles it)
+        if (userRole === 'SuperAdmin' || isDepartmentAdminUser(user) || isArchivistUser(user)) {
             return {}
         }
 
-        // Other users see only their own forms
         return { createdBy: user.id }
     }
 
@@ -196,13 +190,15 @@ export default function FormsListPage() {
                     <h1 className="text-4xl font-black text-slate-900 tracking-tight" dir="rtl">قوالب الوثائق</h1>
                     <p className="mt-2 text-lg text-slate-500 font-medium">إدارة جميع قوالب الأرشفة وإنشاء قوالب جديدة.</p>
                 </div>
-                <Link
-                    href="/forms/new"
-                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-white transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 w-full md:w-auto"
-                >
-                    <PlusCircle size={22} strokeWidth={2.5} />
-                    <span>إنشاء قالب جديد</span>
-                </Link>
+                {user && canAccessNewFormBuilder(user) && (
+                    <Link
+                        href="/forms/new"
+                        className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-white transition-all shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 w-full md:w-auto"
+                    >
+                        <PlusCircle size={22} strokeWidth={2.5} />
+                        <span>إنشاء قالب جديد</span>
+                    </Link>
+                )}
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden transition-all hover:shadow-md">

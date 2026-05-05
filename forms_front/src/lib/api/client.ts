@@ -77,10 +77,14 @@ export interface ApiResponse<T = any> {
 
 export interface PaginatedResponse<T> {
   items: T[]
-  totalCount: number
+  /** Legacy / alternate API field names */
+  totalCount?: number
+  totalItems?: number
   page: number
   pageSize: number
   totalPages: number
+  hasNextPage?: boolean
+  hasPreviousPage?: boolean
 }
 
 // Types for API entities
@@ -146,6 +150,27 @@ export interface Permission {
   action: string
   isActive: boolean
   createdAt: string
+}
+
+/** Row in UserPermissions — individual overrides (e.g. CreateFormTemplate for an archivist). */
+export interface UserPermissionRecord {
+  id: string
+  userId: string
+  permissionId: string
+  granted: boolean
+  createdAt: string
+  permissionName?: string | null
+}
+
+/** Row in FormPermissions — template assigned to a user (e.g. archivist). */
+export interface FormPermissionRecord {
+  id: string
+  formId: string
+  userId: string
+  permission: string
+  createdAt: string
+  formTitle?: string
+  userName?: string
 }
 
 export interface Assignment {
@@ -336,16 +361,14 @@ class ApiClient {
   // Get department context from current user
   // SuperAdmin users should NOT have department context added automatically
   private getDepartmentContext(): { departmentId?: string } {
-    // Check if user is SuperAdmin
-    const isSuperAdmin = this.user?.role?.name === 'SuperAdmin' || 
-                         this.user?.roleName === 'SuperAdmin' ||
-                         this.user?.permissions?.some(p => p.name === 'SuperAdmin')
-    
-    // Don't add department context for SuperAdmin
+    const rn = (this.user?.role?.name || this.user?.roleName || '').toLowerCase()
+    const isSuperAdmin =
+      rn === 'superadmin' || this.user?.permissions?.some((p) => (p.name || '').toLowerCase() === 'superadmin')
+
     if (isSuperAdmin) {
       return {}
     }
-    
+
     return this.user?.departmentId ? { departmentId: this.user.departmentId } : {}
   }
 
@@ -556,25 +579,33 @@ class ApiClient {
       }
     }
     
-    // Add department context to request body for POST/PUT requests
+    // Add department context to request body for POST/PUT requests (never for department CRUD — wrong tenant)
     if ((method === 'POST' || method === 'PUT') && options.body) {
       try {
         const bodyData = JSON.parse(options.body as string)
         const departmentContext = this.getDepartmentContext()
-        
-        console.log('POST/PUT Request Body Before:', bodyData)
-        console.log('Department Context:', departmentContext)
-        console.log('Body has departmentId:', !!bodyData.departmentId)
-        console.log('Body has organizationId:', !!bodyData.organizationId)
-        
-        // Only add department context if not already present and if user has department
-        // Don't override if departmentId or organizationId is explicitly provided
-        if (departmentContext.departmentId && !bodyData.departmentId && !bodyData.organizationId) {
-          console.log('Adding department context to body')
-          bodyData.departmentId = departmentContext.departmentId
-          options.body = JSON.stringify(bodyData)
+
+        const pathOnly = endpoint.replace(/\?.*$/, '')
+        const isDepartmentCrud =
+          pathOnly === '/departments' ||
+          pathOnly === '/organizations' ||
+          (method === 'PUT' && /^\/departments\/[^/]+$/.test(pathOnly))
+
+        if (isDepartmentCrud) {
+          // Do not inject departmentId into create/update department payloads
         } else {
-          console.log('Skipping department context - already has departmentId or organizationId')
+          console.log('POST/PUT Request Body Before:', bodyData)
+          console.log('Department Context:', departmentContext)
+          console.log('Body has departmentId:', !!bodyData.departmentId)
+          console.log('Body has organizationId:', !!bodyData.organizationId)
+
+          if (departmentContext.departmentId && !bodyData.departmentId && !bodyData.organizationId) {
+            console.log('Adding department context to body')
+            bodyData.departmentId = departmentContext.departmentId
+            options.body = JSON.stringify(bodyData)
+          } else {
+            console.log('Skipping department context - already has departmentId or organizationId')
+          }
         }
       } catch (error) {
         // If body is not JSON, continue without modification
@@ -930,12 +961,24 @@ class ApiClient {
     departmentId?: string
     roleId?: string
     isActive?: boolean
+    page?: number
+    pageSize?: number
+    search?: string
+    sortBy?: string
+    sortDescending?: boolean
   }): Promise<ApiResponse<PaginatedResponse<User>>> {
     const searchParams = new URLSearchParams()
     if (params?.departmentId) searchParams.append('departmentId', params.departmentId)
     if (params?.roleId) searchParams.append('roleId', params.roleId)
     if (params?.isActive !== undefined) searchParams.append('isActive', params.isActive.toString())
-    
+    if (params?.page !== undefined) searchParams.append('page', String(params.page))
+    if (params?.pageSize !== undefined) searchParams.append('pageSize', String(params.pageSize))
+    if (params?.search) searchParams.append('search', params.search)
+    if (params?.sortBy) searchParams.append('sortBy', params.sortBy)
+    if (params?.sortDescending !== undefined) {
+      searchParams.append('sortDescending', params.sortDescending ? 'true' : 'false')
+    }
+
     const query = searchParams.toString()
     return this.request(`/users${query ? `?${query}` : ''}`, {}, false, 0) // No cache for fresh data
   }
@@ -955,6 +998,52 @@ class ApiClient {
     return this.request(`/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    })
+  }
+
+  async getUserPermissions(userId: string): Promise<ApiResponse<UserPermissionRecord[]>> {
+    return this.request(`/users/${userId}/permissions`, {}, false, 0)
+  }
+
+  /** Body must be a JSON string (permission name), e.g. "CreateFormTemplate". */
+  async addUserPermission(userId: string, permissionName: string): Promise<ApiResponse<UserPermissionRecord>> {
+    return this.request(`/users/${userId}/permissions`, {
+      method: 'POST',
+      body: JSON.stringify(permissionName),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  async removeUserPermission(userId: string, permissionName: string): Promise<ApiResponse<boolean>> {
+    const encoded = encodeURIComponent(permissionName)
+    return this.request(`/users/${userId}/permissions/${encoded}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async getUserFormPermissions(userId: string): Promise<ApiResponse<FormPermissionRecord[]>> {
+    return this.request(`/users/${userId}/form-permissions`, {}, false, 0)
+  }
+
+  /** Assign a user to a form template (e.g. permission <code>archivist</code>). SuperAdmin / DepartmentAdmin. */
+  async addFormPermission(
+    formId: string,
+    body: { userId: string; permission: string }
+  ): Promise<ApiResponse<FormPermissionRecord>> {
+    return this.request(`/forms/${formId}/permissions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        formId,
+        userId: body.userId,
+        permission: body.permission,
+      }),
+    })
+  }
+
+  async removeFormPermission(formId: string, userId: string, permission: string): Promise<ApiResponse<boolean>> {
+    const encoded = encodeURIComponent(permission)
+    return this.request(`/forms/${formId}/permissions/${userId}/${encoded}`, {
+      method: 'DELETE',
     })
   }
 
@@ -996,7 +1085,8 @@ class ApiClient {
     console.log('getRoles called with params:', params)
     
     if (params?.departmentId) {
-      const endpoint = `/Roles/department/${params.departmentId}`
+      const qs = new URLSearchParams({ page: '1', pageSize: '100' })
+      const endpoint = `/Roles/department/${params.departmentId}?${qs.toString()}`
       console.log('Using department-specific endpoint:', endpoint)
       
       return this.request(endpoint, {
@@ -1042,12 +1132,16 @@ class ApiClient {
     departmentId?: string
     status?: string
     createdBy?: string
+    page?: number
+    pageSize?: number
   }): Promise<ApiResponse<PaginatedResponse<Form>>> {
     const searchParams = new URLSearchParams()
     if (params?.departmentId) searchParams.append('departmentId', params.departmentId)
     if (params?.status) searchParams.append('status', params.status)
     if (params?.createdBy) searchParams.append('createdBy', params.createdBy)
-    
+    if (params?.page != null) searchParams.append('page', String(params.page))
+    if (params?.pageSize != null) searchParams.append('pageSize', String(params.pageSize))
+
     const query = searchParams.toString()
     return this.request(`/forms${query ? `?${query}` : ''}`, {}, true, 300000) // Cache for 5 minutes
   }
@@ -1172,6 +1266,22 @@ class ApiClient {
 
   async getSubmission(id: string): Promise<ApiResponse<FormSubmission>> {
     return this.request(`/submissions/${id}`, {}, true, 300000) // Cache for 5 minutes
+  }
+
+  /**
+   * Delete an archived DocumentSubmission by its id.
+   *
+   * Backend: DELETE /api/DocumentSubmissions/{submissionId}
+   * Authorization: Superadmin (any department) or Departmentadmin (own department only).
+   * The backend also deletes all linked attachments automatically.
+   *
+   * Success response message may include the number of deleted attachments,
+   * e.g. "Document submission deleted successfully along with 8 linked attachment(s)."
+   */
+  async deleteDocumentSubmission(submissionId: string): Promise<ApiResponse<boolean>> {
+    return this.request<boolean>(`/DocumentSubmissions/${submissionId}`, {
+      method: 'DELETE',
+    })
   }
 
   // Form preview endpoints (requires authentication - internal archiving system)

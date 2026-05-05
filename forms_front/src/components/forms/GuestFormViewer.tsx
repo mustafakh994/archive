@@ -5,6 +5,7 @@ import { useGuestForm } from '@/lib/hooks/useGuestForm'
 import { AlertCircle, CheckCircle, Loader2, Send } from 'lucide-react'
 import { loadGoogleFont } from '@/lib/utils/arabicGoogleFonts'
 import SignaturePad from '@/components/forms/SignaturePad'
+import ScannerCaptureDialog from '@/components/forms/ScannerCaptureDialog'
 import { useAuthStore } from '@/lib/store/useAuthStore'
 import { uploadFormDataWithProgress } from '@/lib/uploadWithProgress'
 
@@ -114,6 +115,43 @@ export default function GuestFormViewer({
         delete next[fieldId]
         return next
       })
+    }
+  }
+
+  const uploadSystemAttachments = async (files: File[]) => {
+    if (!files.length) return
+
+    setAttachmentsUploading(true)
+    setAttachmentsUploadPercent(0)
+    try {
+      const newAttachments = [...documentAttachments]
+      const total = files.length
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const uploadFormData = new FormData()
+        uploadFormData.append('file', file)
+        uploadFormData.append('submissionId', tempSubmissionId)
+        uploadFormData.append('fieldId', 'system_attachments')
+
+        const result = await uploadFormDataWithProgress('/api/upload', uploadFormData, (pct) => {
+          const overall = Math.round(((i + pct / 100) / total) * 100)
+          setAttachmentsUploadPercent(Math.min(100, overall))
+        })
+
+        const url = typeof result.url === 'string' ? result.url : ''
+        if (url) newAttachments.push(url)
+      }
+      setDocumentAttachments(newAttachments)
+      setAttachmentsError('')
+      setAttachmentsUploadPercent(100)
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      const errorMessage = error instanceof Error ? error.message : 'فشل رفع الملف. يرجى المحاولة مرة أخرى.'
+      setAttachmentsError(errorMessage)
+      throw new Error(errorMessage)
+    } finally {
+      setAttachmentsUploading(false)
+      setAttachmentsUploadPercent(0)
     }
   }
 
@@ -492,7 +530,8 @@ export default function GuestFormViewer({
         const isUploading = fileUploading[field.id]
         const uploadPct = fileUploadProgress[field.id]
         return (
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+          <div className="space-y-3">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
             <input
               type="file"
               onChange={(e) => {
@@ -540,15 +579,23 @@ export default function GuestFormViewer({
                     ) : (
                       <>
                         <p className="mt-2 text-base text-gray-900">اضغط لاختيار ملف أو اسحبه هنا</p>
-                        {props.maxFileSize && (
-                          <p className="text-sm text-gray-900 mt-1">الحد الأقصى: {props.maxFileSize} MB</p>
-                        )}
                       </>
                     )}
                   </>
                 )}
               </div>
             </label>
+            </div>
+            <div className="flex justify-end">
+              <ScannerCaptureDialog
+                disabled={isUploading}
+                buttonText="مسح مباشر"
+                title="مسح مرفق الحقل"
+                onSave={async (file) => {
+                  await handleFileUpload(field.id, file)
+                }}
+              />
+            </div>
           </div>
         )
 
@@ -1171,36 +1218,12 @@ export default function GuestFormViewer({
                   onChange={async (e: React.ChangeEvent<HTMLInputElement>) => {
                     const files = e.target.files
                     if (files && files.length > 0) {
-                      setAttachmentsUploading(true)
-                      setAttachmentsUploadPercent(0)
                       try {
-                        const newAttachments = [...documentAttachments]
-                        const total = files.length
-                        for (let i = 0; i < files.length; i++) {
-                          const file = files[i]
-                          const uploadFormData = new FormData()
-                          uploadFormData.append('file', file)
-                          uploadFormData.append('submissionId', tempSubmissionId)
-                          uploadFormData.append('fieldId', 'system_attachments')
-
-                          const result = await uploadFormDataWithProgress('/api/upload', uploadFormData, (pct) => {
-                            const overall = Math.round(((i + pct / 100) / total) * 100)
-                            setAttachmentsUploadPercent(Math.min(100, overall))
-                          })
-
-                          const url = typeof result.url === 'string' ? result.url : ''
-                          if (url) newAttachments.push(url)
-                        }
-                        setDocumentAttachments(newAttachments)
-                        setAttachmentsError('')
-                        setAttachmentsUploadPercent(100)
+                        await uploadSystemAttachments(Array.from(files))
                       } catch (error) {
-                        console.error('Error uploading file:', error)
                         const errorMessage = error instanceof Error ? error.message : 'فشل رفع الملف. يرجى المحاولة مرة أخرى.'
                         alert(errorMessage)
                       } finally {
-                        setAttachmentsUploading(false)
-                        setAttachmentsUploadPercent(0)
                         e.target.value = ''
                       }
                     }
@@ -1240,6 +1263,14 @@ export default function GuestFormViewer({
                     )}
                   </div>
                 </label>
+                <div className="mt-4 flex justify-end">
+                  <ScannerCaptureDialog
+                    disabled={attachmentsUploading}
+                    onSave={async (file) => {
+                      await uploadSystemAttachments([file])
+                    }}
+                  />
+                </div>
 
                 {/* List uploaded files */}
                 {documentAttachments.length > 0 && (
