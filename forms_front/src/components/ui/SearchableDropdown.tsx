@@ -13,6 +13,8 @@ interface SearchableDropdownProps {
   disabled?: boolean
   className?: string
   dir?: 'rtl' | 'ltr'
+  /** Taller trigger to match large filter rows (e.g. submissions dashboard). */
+  variant?: 'default' | 'comfortable'
 }
 
 export default function SearchableDropdown({
@@ -24,7 +26,8 @@ export default function SearchableDropdown({
   loading = false,
   disabled = false,
   className = '',
-  dir = 'rtl'
+  dir = 'rtl',
+  variant = 'default'
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -79,19 +82,30 @@ export default function SearchableDropdown({
   }
 
   return (
-    <div className={`relative ${className}`} ref={dropdownRef} dir={dir}>
+    <div className={`relative z-30 ${className}`} ref={dropdownRef} dir={dir}>
       {/* Trigger Button */}
       <button
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`
+        className={
+          variant === 'comfortable'
+            ? `
+          submissions-dashboard-filter-tall
+          w-full min-h-14 px-4 py-3 text-base font-medium border border-gray-200 rounded-xl
+          focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500
+          bg-gray-50/50 hover:bg-gray-50 hover:border-gray-300 text-gray-900 flex items-center justify-between shadow-sm
+          ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+          ${dir === 'rtl' ? 'text-right' : 'text-left'}
+        `
+            : `
           w-full px-3 py-2 text-sm border border-gray-300 rounded-lg 
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
           bg-white text-gray-900 flex items-center justify-between
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}
           ${dir === 'rtl' ? 'text-right' : 'text-left'}
-        `}
+        `
+        }
       >
         <span className="truncate">
           {selectedOption ? selectedOption.label : placeholder}
@@ -114,7 +128,7 @@ export default function SearchableDropdown({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
+        <div className="absolute left-0 right-0 top-full z-40 mt-1.5 max-h-72 overscroll-contain overflow-hidden rounded-lg border border-gray-300 bg-white shadow-xl ring-1 ring-black/5">
           {/* Search Input */}
           <div className="p-2 border-b border-gray-200">
             <div className="relative">
