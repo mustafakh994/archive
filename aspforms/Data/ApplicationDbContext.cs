@@ -29,6 +29,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<FileAttachment> FileAttachments { get; set; }
     public DbSet<FormSubmissionAttachment> FormSubmissionAttachments { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+    public DbSet<AttachmentPdfJob> AttachmentPdfJobs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -327,6 +328,18 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // AttachmentPdfJob configuration
+        modelBuilder.Entity<AttachmentPdfJob>(entity =>
+        {
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.Status).HasMaxLength(30);
+            entity.Property(e => e.OwnerKey).HasMaxLength(100);
+            entity.Property(e => e.Title).HasMaxLength(300);
+            entity.HasIndex(e => new { e.OwnerKey, e.CreatedAt });
+            entity.HasIndex(e => new { e.Status, e.CreatedAt });
         });
 
         // Seed SuperAdmin user

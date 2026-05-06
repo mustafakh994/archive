@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { FileText, Users, Building, Settings, PlusCircle, ClipboardList, LogOut, Inbox, FileSpreadsheet, LayoutDashboard } from 'lucide-react'
+import { FileText, Users, Building, Settings, PlusCircle, ClipboardList, LogOut, Inbox, FileSpreadsheet, LayoutDashboard, Download } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store/useAuthStore'
@@ -27,6 +27,7 @@ export default function Sidebar({ isCollapsed }: { isCollapsed: boolean }) {
         ...(showNewFormLink ? [{ label: 'إنشاء قالب جديد', href: '/forms/new', icon: PlusCircle }] as const : []),
         { label: 'جميع الوثائق المؤرشفة', href: '/submissions', icon: Inbox },
         { label: 'البحث المتقدم', href: '/responses', icon: FileSpreadsheet },
+        { label: 'التحميلات', href: '/downloads', icon: Download },
     ]
 
     // SuperAdmin: all directorates. DepartmentAdmin: users in their department only (same /users route).

@@ -39,6 +39,7 @@ services:
       JwtSettings__ExpirationInMinutes: ${JWT_EXP_MIN}
       JwtSettings__RefreshTokenExpirationInDays: ${JWT_REFRESH_DAYS}
       AttachmentEncryption__KeyBase64: ${ATTACHMENT_ENCRYPTION_KEY_BASE64}
+      AttachmentPdfJobs__InternalApiKey: ${ATTACHMENT_PDF_JOBS_INTERNAL_API_KEY}
     volumes:
       - archive_uploads:/app/data/uploads_private
     ports:
@@ -60,6 +61,7 @@ services:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: https://api.archive.hamaprov.net/api
       ATTACHMENT_ENCRYPTION_KEY_BASE64: ${ATTACHMENT_ENCRYPTION_KEY_BASE64}
+      ATTACHMENT_PDF_JOBS_INTERNAL_API_KEY: ${ATTACHMENT_PDF_JOBS_INTERNAL_API_KEY}
     volumes:
       - archive_uploads:/app/data/uploads_private
     ports:

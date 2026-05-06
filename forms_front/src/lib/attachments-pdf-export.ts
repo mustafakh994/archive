@@ -8,7 +8,28 @@ type PdfExportMode = 'single' | 'separate'
 function isImageAttachmentUrl(url: string): boolean {
   const lower = url.toLowerCase()
   if (lower.startsWith('data:image/')) return true
-  return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg'].some((ext) => lower.includes(ext))
+  return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg', '.avif', '.heic', '.heif', '.tif', '.tiff'].some((ext) => lower.includes(ext))
+}
+
+function hasImageFileExtension(filename: string): boolean {
+  const lower = filename.toLowerCase()
+  return ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg', '.avif', '.heic', '.heif', '.tif', '.tiff'].some((ext) => lower.includes(ext))
+}
+
+function extractAttachmentFilename(url: string): string {
+  try {
+    const full = url.startsWith('http://') || url.startsWith('https://')
+      ? url
+      : `http://local${url.startsWith('/') ? url : `/${url}`}`
+    const parsed = new URL(full)
+    const fromQuery = parsed.searchParams.get('file')
+      || parsed.searchParams.get('filename')
+      || parsed.searchParams.get('name')
+    if (fromQuery) return decodeURIComponent(fromQuery)
+    return parsed.pathname.split('/').pop() || ''
+  } catch {
+    return url
+  }
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -42,6 +63,27 @@ async function fetchImageDataUrl(url: string, token: string | null): Promise<str
   return blobToDataUrl(await res.blob())
 }
 
+async function toImageDataUrlIfPossible(url: string, token: string | null): Promise<string | null> {
+  const trimmed = url.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith('data:image/')) return trimmed
+
+  if (isApiAttachmentDownloadUrl(trimmed)) {
+    const { blob, filename } = await fetchAttachmentWithAuth(trimmed, token)
+    const fromMimeType = blob.type.toLowerCase().startsWith('image/')
+    const fromFilename = hasImageFileExtension(filename)
+    const fromUrlFilename = hasImageFileExtension(extractAttachmentFilename(trimmed))
+    if (!fromMimeType && !fromFilename && !fromUrlFilename) return null
+    return blobToDataUrl(blob)
+  }
+
+  if (!isImageAttachmentUrl(trimmed) && !hasImageFileExtension(extractAttachmentFilename(trimmed))) {
+    return null
+  }
+
+  return fetchImageDataUrl(trimmed, token)
+}
+
 async function addImagePage(pdf: jsPDF, dataUrl: string): Promise<void> {
   const { width, height } = await getImageDimensions(dataUrl)
   const pageWidth = pdf.internal.pageSize.getWidth()
@@ -60,12 +102,21 @@ export async function exportAttachmentImagesToPdf(
   token: string | null,
   baseName: string
 ): Promise<{ exportedCount: number }> {
-  const imageUrls = Array.from(new Set(attachmentUrls.filter(isImageAttachmentUrl)))
-  if (imageUrls.length === 0) {
-    throw new Error('لا توجد صور مرفقة للتصدير إلى PDF.')
+  const uniqueUrls = Array.from(new Set(attachmentUrls.map((u) => u.trim()).filter(Boolean)))
+  const imageDataUrls: string[] = []
+
+  for (const url of uniqueUrls) {
+    try {
+      const dataUrl = await toImageDataUrlIfPossible(url, token)
+      if (dataUrl) imageDataUrls.push(dataUrl)
+    } catch {
+      // Skip broken/unreadable attachment and continue exporting other images.
+    }
   }
 
-  const imageDataUrls = await Promise.all(imageUrls.map((url) => fetchImageDataUrl(url, token)))
+  if (imageDataUrls.length === 0) {
+    throw new Error('لا توجد صور مرفقة للتصدير إلى PDF.')
+  }
 
   if (mode === 'single') {
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
@@ -82,5 +133,5 @@ export async function exportAttachmentImagesToPdf(
     }
   }
 
-  return { exportedCount: imageUrls.length }
+  return { exportedCount: imageDataUrls.length }
 }

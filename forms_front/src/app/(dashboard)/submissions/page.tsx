@@ -27,7 +27,7 @@ import {
   triggerBrowserDownload,
   openAttachmentInNewTabWithAuth,
 } from '@/lib/attachment-download-client'
-import { exportAttachmentImagesToPdf } from '@/lib/attachments-pdf-export'
+import { createAttachmentPdfJob } from '@/lib/attachment-pdf-jobs-client'
 import { buildArchiveDocumentPlainText, extractArchiveDisplayFields } from '@/lib/archive-document-fields'
 import { ARCHIVE_QR_PRINT_PIXEL_SIZE, getArchiveQrImageUrl } from '@/lib/archive-document-qr'
 
@@ -319,6 +319,7 @@ export default function SubmissionsPage() {
   const [qrPlainText, setQrPlainText] = useState('')
   const [qrUsesPublicLink, setQrUsesPublicLink] = useState(false)
   const [isExportingAttachmentsPdf, setIsExportingAttachmentsPdf] = useState(false)
+  const [isExportingTemplateZip, setIsExportingTemplateZip] = useState(false)
 
   // Helper to safely parse responseData
   const parseResponseData = (submission: any): Record<string, any> => {
@@ -333,6 +334,50 @@ export default function SubmissionsPage() {
       console.error('Failed to parse responseData:', e)
       return {}
     }
+  }
+
+  const collectSubmissionAttachmentUrls = (data: Record<string, any>): string[] => {
+    const attachmentSet = new Set<string>()
+    Object.entries(data || {}).forEach(([key, value]) => {
+      if (key === 'system_attachments' && Array.isArray(value)) {
+        value.forEach((v) => {
+          if (typeof v === 'string' && v.trim()) attachmentSet.add(v.trim())
+        })
+        return
+      }
+
+      if (typeof value === 'string') {
+        const trimmed = value.trim()
+        if (!trimmed) return
+        if (
+          trimmed.includes('/api/attachments/download') ||
+          trimmed.includes('/api/files/download/') ||
+          trimmed.startsWith('http') ||
+          trimmed.startsWith('/uploads/') ||
+          trimmed.startsWith('data:image/')
+        ) {
+          attachmentSet.add(trimmed)
+        }
+      }
+
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          if (typeof item !== 'string') return
+          const trimmed = item.trim()
+          if (!trimmed) return
+          if (
+            trimmed.includes('/api/attachments/download') ||
+            trimmed.includes('/api/files/download/') ||
+            trimmed.startsWith('http') ||
+            trimmed.startsWith('/uploads/') ||
+            trimmed.startsWith('data:image/')
+          ) {
+            attachmentSet.add(trimmed)
+          }
+        })
+      }
+    })
+    return Array.from(attachmentSet)
   }
 
   const formatCompactValue = (value: unknown): string => {
@@ -1035,22 +1080,100 @@ export default function SubmissionsPage() {
   const exportSelectedSubmissionAttachmentsPdf = async (mode: 'single' | 'separate') => {
     if (!selectedSubmission) return
     const data = parseResponseData(selectedSubmission)
-    const systemAttachments = Array.isArray(data['system_attachments'])
-      ? (data['system_attachments'].filter((v: unknown) => typeof v === 'string') as string[])
-      : []
+    const attachmentUrls = collectSubmissionAttachmentUrls(data)
+    if (attachmentUrls.length === 0) {
+      errorToast('لا توجد مرفقات', 'لا توجد ملفات مرفقة لإرسالها إلى التحميلات.')
+      return
+    }
 
     setIsExportingAttachmentsPdf(true)
     try {
-      await exportAttachmentImagesToPdf(
-        systemAttachments,
-        mode,
-        token,
-        `submission-${selectedSubmission.id}-attachments`
-      )
+      if (mode === 'single') {
+        await createAttachmentPdfJob(token, {
+          submissionId: selectedSubmission.id,
+          title: `PDF مرفقات الوثيقة ${selectedSubmission.id}`,
+          attachmentUrls,
+        })
+      } else {
+        await Promise.all(
+          attachmentUrls.map((url, idx) =>
+            createAttachmentPdfJob(token, {
+              submissionId: selectedSubmission.id,
+              title: `PDF مرفق ${idx + 1} للوثيقة ${selectedSubmission.id}`,
+              attachmentUrls: [url],
+            })
+          )
+        )
+      }
+      successToast('تمت إضافة المهمة', 'تم إرسال تجهيز ملفات PDF إلى صفحة التحميلات.')
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'فشل تصدير المرفقات كـ PDF')
+      errorToast('فشل تجهيز PDF', e instanceof Error ? e.message : 'تعذر إرسال المهمة إلى التحميلات.')
     } finally {
       setIsExportingAttachmentsPdf(false)
+    }
+  }
+
+  const exportTemplateAttachmentsZip = async () => {
+    if (!token) {
+      errorToast('غير مصرح', 'يجب تسجيل الدخول أولاً.')
+      return
+    }
+    if (!selectedFormId) {
+      errorToast('اختر قالبًا', 'يجب اختيار قالب أولاً لتجهيز مرفقاته.')
+      return
+    }
+    setIsExportingTemplateZip(true)
+    try {
+      const allSubmissions: Submission[] = []
+      const maxPages = 200
+      for (let currentPage = 1; currentPage <= maxPages; currentPage++) {
+        const response = await apiClient.getFormSubmissions(selectedFormId, {
+          page: currentPage,
+          pageSize: 200,
+        })
+        if (!response.success || !response.data) {
+          throw new Error(response.message || 'فشل تحميل إرسالات القالب.')
+        }
+        const pageItems = Array.isArray(response.data.items) ? (response.data.items as Submission[]) : []
+        if (pageItems.length === 0) break
+        allSubmissions.push(...pageItems)
+
+        const hasNext = Boolean((response.data as any).hasNextPage)
+        if (!hasNext) break
+      }
+
+      if (allSubmissions.length === 0) {
+        errorToast('لا توجد بيانات', 'لا توجد إرسالات ضمن القالب المحدد.')
+        return
+      }
+
+      const grouped = allSubmissions
+        .map((submission) => {
+          const data = parseResponseData(submission)
+          const attachmentUrls = collectSubmissionAttachmentUrls(data)
+          return {
+            submissionId: submission.id,
+            attachmentUrls,
+          }
+        })
+        .filter((group) => group.attachmentUrls.length > 0)
+
+      if (grouped.length === 0) {
+        errorToast('لا توجد مرفقات', 'لا توجد مرفقات مرتبطة بإرسالات القالب المحدد.')
+        return
+      }
+
+      await createAttachmentPdfJob(token, {
+        kind: 'template_zip',
+        templateId: selectedFormId,
+        title: `ZIP مرفقات القالب ${selectedFormId}`,
+        submissionAttachments: grouped,
+      })
+      successToast('تمت إضافة المهمة', `تم إرسال تجهيز ${grouped.length} وثيقة إلى صفحة التحميلات.`)
+    } catch (e) {
+      errorToast('فشل تجهيز ZIP', e instanceof Error ? e.message : 'تعذر إرسال المهمة إلى التحميلات.')
+    } finally {
+      setIsExportingTemplateZip(false)
     }
   }
 
@@ -1322,6 +1445,18 @@ export default function SubmissionsPage() {
                     <svg className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                   </div>
                 </div>
+
+                <button
+                  onClick={() => {
+                    void exportTemplateAttachmentsZip()
+                  }}
+                  disabled={!selectedFormId || isExportingTemplateZip || loading}
+                  className="flex flex-1 md:flex-none justify-center items-center gap-2 px-4 py-2 bg-gradient-to-tr from-violet-600 to-violet-500 text-white rounded-lg hover:from-violet-700 hover:to-violet-600 transition-all shadow-[0_2px_10px_-3px_rgba(139,92,246,0.5)] active:scale-95 text-[13px] font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                  dir="rtl"
+                >
+                  <FileText size={16} strokeWidth={2.5} />
+                  <span>{isExportingTemplateZip ? 'جاري تجهيز ZIP...' : 'تجهيز مرفقات القالب ZIP'}</span>
+                </button>
 
                 <button
                   onClick={exportToCSV}
@@ -1729,9 +1864,7 @@ export default function SubmissionsPage() {
               {/* System Attachments */}
               {(() => {
                 const decodedData = parseResponseData(selectedSubmission)
-                const systemAttachments = Array.isArray(decodedData['system_attachments'])
-                  ? decodedData['system_attachments'].filter((v: unknown) => typeof v === 'string') as string[]
-                  : []
+                const systemAttachments = collectSubmissionAttachmentUrls(decodedData)
 
                 if (systemAttachments.length === 0) return null
 
@@ -1754,7 +1887,7 @@ export default function SubmissionsPage() {
                           className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <FileText size={14} />
-                          صور في PDF واحد
+                          تجهيز PDF واحد
                         </button>
                         <button
                           type="button"
@@ -1765,7 +1898,7 @@ export default function SubmissionsPage() {
                           className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <FileText size={14} />
-                          كل صورة PDF منفصل
+                          تجهيز PDF لكل صورة
                         </button>
                       </div>
                     </div>

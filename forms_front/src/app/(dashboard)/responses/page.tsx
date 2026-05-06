@@ -25,7 +25,7 @@ import {
   openAttachmentInNewTabWithAuth,
 } from '@/lib/attachment-download-client'
 import { normalizeAttachmentUrl } from '@/lib/attachment-url'
-import { exportAttachmentImagesToPdf } from '@/lib/attachments-pdf-export'
+import { createAttachmentPdfJob } from '@/lib/attachment-pdf-jobs-client'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import ExcelExportWizard from '@/components/forms/ExcelExportWizard'
 
@@ -109,6 +109,7 @@ function AdvancedSearchContent() {
   const [loadingForm, setLoadingForm] = useState(false)
   const [showExportWizard, setShowExportWizard] = useState(false)
   const [isExportingAttachmentsPdf, setIsExportingAttachmentsPdf] = useState(false)
+  const [isExportingTemplateZip, setIsExportingTemplateZip] = useState(false)
 
   // Filter and pagination state
   const [page, setPage] = useState(1)
@@ -589,19 +590,105 @@ function AdvancedSearchContent() {
           .filter((v: unknown) => typeof v === 'string')
           .map((v) => normalizeAttachmentUrl(v as string)) as string[])
       : []
+    if (systemAttachments.length === 0) {
+      alert('لا توجد ملفات مرفقة لإرسالها إلى التحميلات.')
+      return
+    }
 
     setIsExportingAttachmentsPdf(true)
     try {
-      await exportAttachmentImagesToPdf(
-        systemAttachments,
-        mode,
-        token,
-        `submission-${selectedSubmission.id}-attachments`
-      )
+      if (mode === 'single') {
+        await createAttachmentPdfJob(token, {
+          submissionId: selectedSubmission.id,
+          title: `PDF مرفقات الوثيقة ${selectedSubmission.id}`,
+          attachmentUrls: systemAttachments,
+        })
+      } else {
+        await Promise.all(
+          systemAttachments.map((url, idx) =>
+            createAttachmentPdfJob(token, {
+              submissionId: selectedSubmission.id,
+              title: `PDF مرفق ${idx + 1} للوثيقة ${selectedSubmission.id}`,
+              attachmentUrls: [url],
+            })
+          )
+        )
+      }
+      alert('تم إرسال تجهيز ملفات PDF إلى صفحة التحميلات.')
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'فشل تصدير المرفقات كـ PDF')
+      alert(e instanceof Error ? e.message : 'تعذر إرسال المهمة إلى التحميلات.')
     } finally {
       setIsExportingAttachmentsPdf(false)
+    }
+  }
+
+  const exportTemplateAttachmentsZip = async () => {
+    if (!token) {
+      alert('يجب تسجيل الدخول أولاً.')
+      return
+    }
+    if (!selectedFormId) {
+      alert('اختر قالبًا أولاً.')
+      return
+    }
+
+    setIsExportingTemplateZip(true)
+    try {
+      const allSubmissions: Submission[] = []
+      const maxPages = 200
+      for (let currentPage = 1; currentPage <= maxPages; currentPage++) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+        const response = await fetch(`${apiUrl}/forms/${selectedFormId}/submissions?page=${currentPage}&pageSize=200`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        })
+        const result = await response.json().catch(() => ({}))
+        const success = result.success !== undefined ? result.success : result.Success
+        const data = result.data || result.Data
+        if (!success || !data) {
+          throw new Error(result.message || result.Message || 'فشل تحميل إرسالات القالب.')
+        }
+
+        const pageItems = Array.isArray(data.items) ? data.items : Array.isArray(data.Items) ? data.Items : []
+        if (pageItems.length === 0) break
+        allSubmissions.push(...pageItems)
+        const hasNext = Boolean(data.hasNextPage || data.HasNextPage)
+        if (!hasNext) break
+      }
+
+      const grouped = allSubmissions
+        .map((submission) => {
+          const data = parseResponseData(submission)
+          const attachmentUrls = Array.isArray(data['system_attachments'])
+            ? (data['system_attachments']
+                .filter((v: unknown) => typeof v === 'string')
+                .map((v) => normalizeAttachmentUrl(v as string)) as string[])
+            : []
+          return {
+            submissionId: submission.id,
+            attachmentUrls,
+          }
+        })
+        .filter((group) => group.attachmentUrls.length > 0)
+
+      if (grouped.length === 0) {
+        alert('لا توجد مرفقات ضمن إرسالات هذا القالب.')
+        return
+      }
+
+      await createAttachmentPdfJob(token, {
+        kind: 'template_zip',
+        templateId: selectedFormId,
+        title: `ZIP مرفقات القالب ${selectedFormId}`,
+        submissionAttachments: grouped,
+      })
+      alert(`تم إرسال تجهيز ${grouped.length} وثيقة إلى صفحة التحميلات.`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'تعذر إرسال المهمة إلى التحميلات.')
+    } finally {
+      setIsExportingTemplateZip(false)
     }
   }
 
@@ -627,16 +714,29 @@ function AdvancedSearchContent() {
             <FileText size={18} className="text-indigo-500" strokeWidth={2.5} />
             اختر قالب الوثيقة (اختياري للبحث المخصص)
           </label>
-          <SearchableDropdown
-            options={formOptions}
-            value={selectedFormId}
-            onChange={setSelectedFormId}
-            placeholder="جميع قوالب الوثائق..."
-            searchPlaceholder="البحث في القوالب..."
-            loading={loadingForms}
-            className="max-w-xl"
-            dir="rtl"
-          />
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            <SearchableDropdown
+              options={formOptions}
+              value={selectedFormId}
+              onChange={setSelectedFormId}
+              placeholder="جميع قوالب الوثائق..."
+              searchPlaceholder="البحث في القوالب..."
+              loading={loadingForms}
+              className="max-w-xl w-full"
+              dir="rtl"
+            />
+            <button
+              type="button"
+              disabled={!selectedFormId || isExportingTemplateZip || loading}
+              onClick={() => {
+                void exportTemplateAttachmentsZip()
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-bold"
+            >
+              <FileText size={16} />
+              {isExportingTemplateZip ? 'جاري تجهيز ZIP...' : 'تجهيز مرفقات القالب ZIP'}
+            </button>
+          </div>
         </div>
 
         {/* Filters and Actions */}
@@ -1049,7 +1149,7 @@ function AdvancedSearchContent() {
                                 className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <FileText size={14} />
-                                صور في PDF واحد
+                                تجهيز PDF واحد
                               </button>
                               <button
                                 type="button"
@@ -1060,7 +1160,7 @@ function AdvancedSearchContent() {
                                 className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <FileText size={14} />
-                                كل صورة PDF منفصل
+                                تجهيز PDF لكل صورة
                               </button>
                             </div>
                           </div>
