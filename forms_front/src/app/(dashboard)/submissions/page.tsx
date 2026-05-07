@@ -26,6 +26,7 @@ import {
   fetchAttachmentWithAuth,
   triggerBrowserDownload,
   openAttachmentInNewTabWithAuth,
+  downloadFileAsBlob,
 } from '@/lib/attachment-download-client'
 import { createAttachmentPdfJob } from '@/lib/attachment-pdf-jobs-client'
 import { buildArchiveDocumentPlainText, extractArchiveDisplayFields } from '@/lib/archive-document-fields'
@@ -822,16 +823,18 @@ export default function SubmissionsPage() {
         if (typeof value === 'string' && value.startsWith('http')) {
           return (
             <div className="space-y-2">
-              <a
-                href={value}
-                download
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  void downloadFileAsBlob(value, token).catch((e) =>
+                    alert(e instanceof Error ? e.message : 'فشل التحميل')
+                  )
+                }}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 text-green-800 rounded-md hover:bg-green-100 border border-green-200 transition-colors font-medium"
               >
                 <Download size={16} />
                 <span>تحميل الملف</span>
-              </a>
+              </button>
             </div>
           )
         }
@@ -1950,12 +1953,30 @@ export default function SubmissionsPage() {
                                 </>
                               ) : (
                                 <>
-                                  <a href={url} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm" title="عرض">
+                                  <button
+                                    type="button"
+                                    title="عرض"
+                                    className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm"
+                                    onClick={() => {
+                                      void openAttachmentInNewTabWithAuth(url, token).catch((e) =>
+                                        alert(e instanceof Error ? e.message : 'فشل العرض')
+                                      )
+                                    }}
+                                  >
                                     <Eye size={16} strokeWidth={2.5} />
-                                  </a>
-                                  <a href={url} download className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm" title="تحميل">
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="تحميل"
+                                    className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm"
+                                    onClick={() => {
+                                      void downloadFileAsBlob(url, token).catch((e) =>
+                                        alert(e instanceof Error ? e.message : 'فشل التحميل')
+                                      )
+                                    }}
+                                  >
                                     <Download size={16} strokeWidth={2.5} />
-                                  </a>
+                                  </button>
                                 </>
                               )}
                             </div>

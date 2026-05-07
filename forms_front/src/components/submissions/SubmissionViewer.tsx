@@ -21,6 +21,7 @@ import {
   fetchAttachmentWithAuth,
   triggerBrowserDownload,
   openAttachmentInNewTabWithAuth,
+  downloadFileAsBlob,
 } from '@/lib/attachment-download-client'
 import { normalizeAttachmentUrl } from '@/lib/attachment-url'
 
@@ -185,14 +186,18 @@ export default function SubmissionViewer({
                 <ExternalLink className="h-4 w-4 text-gray-700" />
               </button>
             </div>
-            <a 
-              href={resolvedUrl}
-              download
+            <button
+              type="button"
+              onClick={() => {
+                void downloadFileAsBlob(resolvedUrl, token).catch((e) =>
+                  alert(e instanceof Error ? e.message : 'فشل التحميل')
+                )
+              }}
               className="inline-flex items-center mt-2 text-sm text-purple-600 hover:text-purple-800"
             >
               <Download className="h-3 w-3 mr-1" />
               Download image
-            </a>
+            </button>
           </div>
         )
       
@@ -889,15 +894,19 @@ export default function SubmissionViewer({
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
-          <a
-            href={expandedImage}
-            download
+          <button
+            type="button"
             className="absolute bottom-4 right-4 inline-flex items-center px-4 py-2 bg-white text-gray-900 rounded-md hover:bg-gray-100 transition-colors"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              void downloadFileAsBlob(expandedImage!, token).catch((err) =>
+                alert(err instanceof Error ? err.message : 'فشل التحميل')
+              )
+            }}
           >
             <Download className="h-4 w-4 mr-2" />
             Download
-          </a>
+          </button>
         </div>
       )}
     </div>

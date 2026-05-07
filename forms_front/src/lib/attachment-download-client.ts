@@ -8,12 +8,18 @@ export function isApiAttachmentDownloadUrl(url: string): boolean {
   try {
     if (url.startsWith('http')) {
       const u = new URL(url)
-      return u.pathname.includes('/api/attachments/download')
+      return (
+        u.pathname.includes('/api/attachments/download') ||
+        u.pathname.includes('/api/files/download/')
+      )
     }
   } catch {
     return false
   }
-  return url.includes('/api/attachments/download')
+  return (
+    url.includes('/api/attachments/download') ||
+    url.includes('/api/files/download/')
+  )
 }
 
 export async function fetchAttachmentWithAuth(
@@ -63,6 +69,59 @@ export function triggerBrowserDownload(blob: Blob, filename: string): void {
   a.click()
   a.remove()
   URL.revokeObjectURL(href)
+}
+
+/**
+ * Download any URL as a blob and trigger browser download.
+ * Works for both same-origin and cross-origin URLs.
+ * Uses auth token when available; falls back to unauthenticated fetch.
+ */
+export async function downloadFileAsBlob(
+  url: string,
+  token: string | null
+): Promise<void> {
+  const absolute =
+    url.startsWith('http://') || url.startsWith('https://')
+      ? url
+      : `${typeof window !== 'undefined' ? window.location.origin : ''}${url.startsWith('/') ? url : `/${url}`}`
+
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const res = await fetch(absolute, { headers })
+  if (!res.ok) {
+    throw new Error(`فشل التنزيل (${res.status})`)
+  }
+
+  const cd = res.headers.get('Content-Disposition')
+  let filename = 'download'
+  if (cd) {
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/i)
+    if (m?.[1]) {
+      try {
+        filename = decodeURIComponent(m[1])
+      } catch {
+        filename = m[1]
+      }
+    } else {
+      const m2 = cd.match(/filename="?([^";]+)"?/i)
+      if (m2?.[1]) filename = m2[1]
+    }
+  } else {
+    try {
+      const u = new URL(absolute)
+      const segments = u.pathname.split('/').filter(Boolean)
+      if (segments.length > 0) {
+        const last = decodeURIComponent(segments[segments.length - 1])
+        if (last.includes('.')) filename = last
+      }
+    } catch { /* keep default */ }
+  }
+
+  const blob = await res.blob()
+  triggerBrowserDownload(blob, filename)
 }
 
 export async function openAttachmentInNewTabWithAuth(url: string, token: string | null): Promise<void> {
