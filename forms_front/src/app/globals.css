@@ -19,6 +19,13 @@ body {
   background: var(--background);
 }
 
+/* Dashboard /submissions — taller filter selects (Tailwind + UA-safe). */
+.submissions-dashboard-filter-tall {
+  min-height: 4.25rem !important;
+  box-sizing: border-box !important;
+  font-size: 1.0625rem !important;
+}
+
 /* RTL Support */
 .rtl {
   direction: rtl;
