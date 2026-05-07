@@ -99,6 +99,7 @@ public class FilesController : ControllerBase
     /// Download a file by ID
     /// </summary>
     [HttpGet("download/{fileId}")]
+    [Authorize]
     public async Task<IActionResult> DownloadFile(Guid fileId)
     {
         try
@@ -131,6 +132,7 @@ public class FilesController : ControllerBase
     /// Download a file by stored filename (legacy mobile compatibility).
     /// </summary>
     [HttpGet("download/by-name/{fileName}")]
+    [Authorize]
     public async Task<IActionResult> DownloadFileByStoredName(string fileName)
     {
         try
