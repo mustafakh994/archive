@@ -30,6 +30,10 @@ import {
 import { createAttachmentPdfJob } from '@/lib/attachment-pdf-jobs-client'
 import { buildArchiveDocumentPlainText, extractArchiveDisplayFields } from '@/lib/archive-document-fields'
 import { ARCHIVE_QR_PRINT_PIXEL_SIZE, getArchiveQrImageUrl } from '@/lib/archive-document-qr'
+import {
+  submissionsDashboardFilterTallClass,
+  submissionsDashboardSelectClass,
+} from '@/components/submissions/filterControlStyles'
 
 // Location Display Component for reverse geocoding
 interface LocationDisplayProps {
@@ -1243,27 +1247,27 @@ export default function SubmissionsPage() {
           </div>
         )}
 
-        {/* Filters and Actions Block */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-8 transition-all duration-300 hover:shadow-md">
-          <div className="p-5 lg:p-6">
-            <div className="flex flex-col xl:flex-row gap-4 mb-2">
-              {/* Primary Search */}
-              <div className="flex-1 relative group">
-                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                  <Search className="text-gray-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+        {/* Filters — no overflow-hidden (clips dropdowns); z-20 vs footer z-10 */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 mb-8 transition-all duration-300 hover:shadow-md">
+          <div className="relative z-20 p-5 lg:p-6">
+            <div className="mb-2 flex flex-col gap-4 xl:flex-row xl:items-start">
+              {/* Primary Search — keep original compact height */}
+              <div className="relative flex-1 group">
+                <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                  <Search className="text-gray-400 transition-colors group-focus-within:text-blue-600" size={20} />
                 </div>
                 <input
                   type="text"
                   placeholder="البحث في البريد الإلكتروني، اسم القالب، أو البيانات..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pr-12 pl-4 py-3.5 text-sm font-medium border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-gray-900 bg-gray-50/50 hover:bg-gray-50 hover:border-gray-300 focus:bg-white shadow-sm"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 py-3.5 pl-4 pr-12 text-sm font-medium text-gray-900 shadow-sm transition-all hover:border-gray-300 hover:bg-gray-50 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                   dir="rtl"
                 />
               </div>
 
-              {/* Core Filters */}
-              <div className="flex flex-col sm:flex-row gap-3">
+              {/* Core Filters — SearchableDropdown triggers stay default (compact) size */}
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <div className="w-full xl:w-[240px]">
                   <SearchableDropdown
                     options={formOptions}
@@ -1272,7 +1276,7 @@ export default function SubmissionsPage() {
                     placeholder="جميع القوالب"
                     searchPlaceholder="البحث في القوالب..."
                     loading={loadingForms}
-                    className="w-full h-full"
+                    className="h-full w-full"
                     dir="rtl"
                   />
                 </div>
@@ -1285,7 +1289,7 @@ export default function SubmissionsPage() {
                     placeholder="جميع البريد الإلكتروني"
                     searchPlaceholder="البحث في البريد..."
                     loading={loadingEmails}
-                    className="w-full h-full"
+                    className="h-full w-full"
                     dir="rtl"
                   />
                 </div>
@@ -1298,7 +1302,7 @@ export default function SubmissionsPage() {
                     placeholder="جميع الأقسام"
                     searchPlaceholder="البحث في الأقسام..."
                     loading={loadingDepartments}
-                    className="w-full h-full"
+                    className="h-full w-full"
                     dir="rtl"
                   />
                 </div>
@@ -1332,9 +1336,9 @@ export default function SubmissionsPage() {
                     <span className="font-medium animate-pulse">جاري تحميل حقول البحث...</span>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2 duration-400 bg-gradient-to-br from-blue-50/50 to-indigo-50/30 p-5 rounded-xl border border-blue-100/60 shadow-inner">
+                  <div className="grid grid-cols-1 gap-5 gap-y-5 rounded-xl border border-blue-100/60 bg-gradient-to-br from-blue-50/50 to-indigo-50/30 p-6 shadow-inner animate-in fade-in slide-in-from-top-2 duration-400 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {searchFields.map(field => (
-                      <div key={field.id} className="space-y-1.5 focus-within:relative z-10">
+                      <div key={field.id} className="relative z-10 space-y-2">
                         <label 
                           className="text-[13px] font-bold text-slate-700 block mr-1 truncate" 
                           title={field.properties.label}
@@ -1347,7 +1351,7 @@ export default function SubmissionsPage() {
                             <select
                               value={dynamicFilters[field.id] || ''}
                               onChange={(e) => handleDynamicFilterChange(field.id, e.target.value)}
-                              className="w-full pl-8 pr-3 py-2.5 text-sm font-medium border border-gray-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 text-gray-800 bg-white hover:border-gray-300 transition-all cursor-pointer shadow-sm appearance-none"
+                              className={submissionsDashboardSelectClass}
                               dir="rtl"
                             >
                               <option value="">الكل</option>
@@ -1364,7 +1368,7 @@ export default function SubmissionsPage() {
                             <select
                               value={dynamicFilters[field.id] || ''}
                               onChange={(e) => handleDynamicFilterChange(field.id, e.target.value)}
-                              className="w-full pl-8 pr-3 py-2.5 text-sm font-medium border border-gray-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 text-gray-800 bg-white hover:border-gray-300 transition-all cursor-pointer shadow-sm appearance-none"
+                              className={submissionsDashboardSelectClass}
                               dir="rtl"
                             >
                               <option value="">الكل</option>
@@ -1379,7 +1383,7 @@ export default function SubmissionsPage() {
                             placeholder={field.properties.placeholder || `البحث في ${field.properties.label}...`}
                             value={dynamicFilters[field.id] || ''}
                             onChange={(e) => handleDynamicFilterChange(field.id, e.target.value)}
-                            className="w-full px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 text-gray-800 shadow-sm placeholder:text-gray-400 bg-white hover:border-gray-300 transition-all"
+                            className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-all placeholder:text-gray-400 hover:border-gray-300 focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10"
                             dir="rtl"
                           />
                         )}
@@ -1392,19 +1396,19 @@ export default function SubmissionsPage() {
           </div>
 
           {/* Footer Actions Desktop & Mobile */}
-          <div className="bg-slate-50 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between">
+          <div className="relative z-10 flex flex-col border-t border-gray-100 bg-slate-50 md:flex-row md:items-center md:justify-between">
             {/* Desktop View & Shared styling logic */}
             <div className="px-6 py-4 w-full flex flex-col md:flex-row items-center justify-between gap-4">
               {/* Sort By Container */}
-              <div className="flex items-center gap-2 w-full md:w-auto bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-400 transition-all">
-                <div className="bg-gray-50/80 px-3 py-2 border-l border-gray-200 text-xs font-bold text-gray-600 flex items-center justify-center">
+              <div className="flex min-h-14 w-full items-stretch gap-2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-all focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-500/20 md:w-auto">
+                <div className="flex shrink-0 items-center justify-center border-l border-gray-200 bg-gray-50/80 px-3 py-3 text-sm font-bold text-gray-600">
                   الترتيب:
                 </div>
-                <div className="flex-1 flex items-center p-1 pl-2">
+                <div className="flex min-h-14 flex-1 items-center p-1.5 pl-2">
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as any)}
-                    className="w-full md:w-auto px-2 py-1.5 text-[13px] font-bold bg-transparent border-none focus:ring-0 text-slate-800 cursor-pointer appearance-none min-w-[120px]"
+                    className={`${submissionsDashboardFilterTallClass} min-h-12 w-full min-w-[120px] cursor-pointer appearance-none border-none bg-transparent px-2 py-2 text-sm font-bold text-slate-800 focus:ring-0 md:w-auto`}
                     dir="rtl"
                   >
                     <option value="submittedAt">تاريخ الإرسال</option>
@@ -1415,10 +1419,10 @@ export default function SubmissionsPage() {
                   <div className="h-4 w-px bg-gray-200 mx-2"></div>
                   <button
                     onClick={() => setSortDescending(!sortDescending)}
-                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors focus:outline-none"
+                    className="shrink-0 rounded-lg p-2.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600 focus:outline-none"
                     title={sortDescending ? 'ترتيب تنازلي' : 'ترتيب تصاعدي'}
                   >
-                    <ArrowUpDown size={16} strokeWidth={2.5} className={sortDescending ? 'rotate-180 transition-transform duration-300' : 'transition-transform duration-300'} />
+                    <ArrowUpDown size={18} strokeWidth={2.5} className={sortDescending ? 'rotate-180 transition-transform duration-300' : 'transition-transform duration-300'} />
                   </button>
                 </div>
               </div>
@@ -1426,7 +1430,9 @@ export default function SubmissionsPage() {
               {/* Actions Right Side */}
               <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
                 <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-bold text-gray-600" dir="rtl">في الصفحة:</span>
+                  <span className="text-sm font-bold text-gray-600" dir="rtl">
+                    في الصفحة:
+                  </span>
                   <div className="relative">
                     <select
                       value={pageSize}
@@ -1434,7 +1440,7 @@ export default function SubmissionsPage() {
                         setPageSize(Number(e.target.value))
                         setPage(1)
                       }}
-                      className="pl-7 pr-3 py-2 text-[13px] font-bold border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 text-slate-800 bg-white shadow-sm cursor-pointer appearance-none transition-all hover:bg-gray-50 block min-w-[70px]"
+                      className={`${submissionsDashboardFilterTallClass} block min-h-14 min-w-[80px] cursor-pointer appearance-none rounded-lg border border-gray-200 bg-white py-3 pl-8 pr-3 text-sm font-bold text-slate-800 shadow-sm transition-all hover:bg-gray-50 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
                       dir="rtl"
                     >
                       <option value="10">10</option>
@@ -2067,4 +2073,3 @@ export default function SubmissionsPage() {
     </div>
   )
 }
-
