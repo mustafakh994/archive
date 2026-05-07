@@ -23,6 +23,7 @@ import {
   fetchAttachmentWithAuth,
   triggerBrowserDownload,
   openAttachmentInNewTabWithAuth,
+  downloadFileAsBlob,
 } from '@/lib/attachment-download-client'
 import { normalizeAttachmentUrl } from '@/lib/attachment-url'
 import { createAttachmentPdfJob } from '@/lib/attachment-pdf-jobs-client'
@@ -437,16 +438,20 @@ function AdvancedSearchContent() {
                     }}
                   />
                 </div>
-                <a
-                  href={resolvedValue}
-                  download
+                <button
+                  type="button"
+                  onClick={() => {
+                    void downloadFileAsBlob(resolvedValue, token).catch((e) =>
+                      alert(e instanceof Error ? e.message : 'فشل التحميل')
+                    )
+                  }}
                   className="inline-flex items-center mt-2 text-sm text-purple-600 hover:text-purple-800"
                 >
                   <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                   تحميل الصورة
-                </a>
+                </button>
               </div>
             )
 
@@ -461,16 +466,20 @@ function AdvancedSearchContent() {
                     <p className="text-sm font-medium text-red-900">PDF Document</p>
                     <p className="text-xs text-red-600">Click to download</p>
                   </div>
-                  <a
-                    href={resolvedValue}
-                    download
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void downloadFileAsBlob(resolvedValue, token).catch((e) =>
+                        alert(e instanceof Error ? e.message : 'فشل التحميل')
+                      )
+                    }}
                     className="inline-flex items-center px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm"
                   >
                     <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                     تحميل
-                  </a>
+                  </button>
                 </div>
               </div>
             )
@@ -486,16 +495,20 @@ function AdvancedSearchContent() {
                     <p className="text-sm font-medium text-gray-900">File Attachment</p>
                     <p className="text-xs text-gray-600">Click to download</p>
                   </div>
-                  <a
-                    href={resolvedValue}
-                    download
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void downloadFileAsBlob(resolvedValue, token).catch((e) =>
+                        alert(e instanceof Error ? e.message : 'فشل التحميل')
+                      )
+                    }}
                     className="inline-flex items-center px-3 py-1.5 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
                   >
                     <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                     تحميل
-                  </a>
+                  </button>
                 </div>
               </div>
             )
@@ -1207,12 +1220,30 @@ function AdvancedSearchContent() {
                                           </>
                                         ) : (
                                           <>
-                                            <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm" title="عرض">
+                                            <button
+                                              type="button"
+                                              title="عرض"
+                                              className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-indigo-600 rounded-lg transition-colors bg-white shadow-sm"
+                                              onClick={() => {
+                                                void openAttachmentInNewTabWithAuth(resolvedUrl, token).catch((e) =>
+                                                  alert(e instanceof Error ? e.message : 'فشل العرض')
+                                                )
+                                              }}
+                                            >
                                                 <Eye size={16} strokeWidth={2.5} />
-                                            </a>
-                                            <a href={resolvedUrl} download className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm" title="تحميل">
+                                            </button>
+                                            <button
+                                              type="button"
+                                              title="تحميل"
+                                              className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-emerald-600 rounded-lg transition-colors bg-white shadow-sm"
+                                              onClick={() => {
+                                                void downloadFileAsBlob(resolvedUrl, token).catch((e) =>
+                                                  alert(e instanceof Error ? e.message : 'فشل التحميل')
+                                                )
+                                              }}
+                                            >
                                                 <Download size={16} strokeWidth={2.5} />
-                                            </a>
+                                            </button>
                                           </>
                                         )}
                                     </div>

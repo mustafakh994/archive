@@ -37,5 +37,5 @@ export function normalizeAttachmentUrl(url: string): string {
   const legacyName = extractLegacyFilename(url)
   if (!legacyName) return url
 
-  return `${getApiOrigin()}/api/files/download/by-name/${encodeURIComponent(legacyName)}`
+  return `/api/files/download/by-name/${encodeURIComponent(legacyName)}`
 }
