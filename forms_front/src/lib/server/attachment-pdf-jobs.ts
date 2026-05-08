@@ -84,8 +84,43 @@ type BackendEnvelope<T> = {
 }
 
 function getBackendApiBase(): string {
-  const configured = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
-  return configured.endsWith('/api') ? configured : `${configured}/api`
+  let base = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').trim().replace(/\/+$/, '')
+  if (!base) base = 'http://localhost:5000/api'
+  if (!/\/api$/i.test(base)) {
+    base = `${base}/api`
+  }
+  return base
+}
+
+/**
+ * Matches Next.js file proxy routes: same upstream shape as `/api/files/download/*`.
+ * See `src/app/api/files/download/` routes (uses `/Files/...` on the API origin).
+ */
+function mapRelativeFilesDownloadToUpstream(relativeUrl: string): string | null {
+  const pathname = relativeUrl.trim().startsWith('/') ? relativeUrl.trim() : `/${relativeUrl.trim()}`
+  let pathOnly = pathname.split('?')[0] || pathname
+  try {
+    if (!pathOnly.startsWith('/')) pathOnly = `/${pathOnly}`
+    const normalized = pathOnly.replace(/\/+$/, '') || pathOnly
+
+    const byName = /^\/api\/files\/download\/by-name\/(.+)$/i.exec(normalized)
+    if (byName?.[1]) {
+      try {
+        const nameSeg = decodeURIComponent(byName[1])
+        if (nameSeg.includes('/') || nameSeg.includes('\\')) return null
+        return `${getBackendApiBase()}/Files/download/by-name/${encodeURIComponent(nameSeg)}`
+      } catch {
+        return `${getBackendApiBase()}/Files/download/by-name/${encodeURIComponent(byName[1])}`
+      }
+    }
+
+    const byId = /^\/api\/files\/download\/([^/]+)$/i.exec(normalized)
+    if (!byId?.[1]) return null
+    if (byId[1].toLowerCase() === 'by-name') return null
+    return `${getBackendApiBase()}/Files/download/${encodeURIComponent(byId[1])}`
+  } catch {
+    return null
+  }
 }
 
 function internalKey(): string {
@@ -199,7 +234,7 @@ function toSafeBaseName(value: string): string {
   return cleaned || 'file'
 }
 
-async function fetchAttachmentBytes(url: string): Promise<Uint8Array | null> {
+async function fetchAttachmentBytes(url: string, bearerToken?: string): Promise<Uint8Array | null> {
   if (url.startsWith('data:image/')) {
     const encoded = url.split(',')[1]
     if (!encoded) return null
@@ -222,8 +257,25 @@ async function fetchAttachmentBytes(url: string): Promise<Uint8Array | null> {
     }
   }
 
-  const absolute = url.startsWith('http://') || url.startsWith('https://') ? url : `${getBackendApiBase().replace(/\/api$/, '')}${url.startsWith('/') ? url : `/${url}`}`
-  const response = await fetch(absolute, { cache: 'no-store' })
+  let fetchUrl: string
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    fetchUrl = url
+  } else {
+    const upstream = mapRelativeFilesDownloadToUpstream(url)
+    if (upstream) {
+      fetchUrl = upstream
+    } else {
+      const apiOrigin = getBackendApiBase().replace(/\/api$/i, '')
+      fetchUrl = `${apiOrigin}${url.startsWith('/') ? url : `/${url}`}`
+    }
+  }
+
+  const headers: Record<string, string> = { Accept: '*/*' }
+  if (bearerToken) {
+    headers.Authorization = `Bearer ${bearerToken}`
+  }
+
+  const response = await fetch(fetchUrl, { cache: 'no-store', headers })
   if (!response.ok) {
     return null
   }
@@ -240,6 +292,20 @@ function isPdf(bytes: Uint8Array): boolean {
     bytes[3] === 0x46 &&
     bytes[4] === 0x2d
   )
+}
+
+/**
+ * Embed WebP/GIF/etc. PDF export jobs run server-side — pdf-lib only accepts PNG/JPEG.
+ */
+async function normalizeRasterBytesForPdf(bytes: Uint8Array): Promise<Uint8Array | null> {
+  if (isPng(bytes) || isJpeg(bytes)) return bytes
+  try {
+    const sharp = (await import('sharp')).default
+    const out = await sharp(Buffer.from(bytes)).png().toBuffer()
+    return new Uint8Array(out)
+  } catch {
+    return null
+  }
 }
 
 async function addImageToPdf(pdf: PDFDocument, bytes: Uint8Array): Promise<boolean> {
@@ -277,7 +343,7 @@ async function addPdfToPdf(target: PDFDocument, pdfBytes: Uint8Array): Promise<n
   return copied.length
 }
 
-async function buildPdfFromAttachmentUrls(attachmentUrls: string[]): Promise<Uint8Array | null> {
+async function buildPdfFromAttachmentUrls(attachmentUrls: string[], bearerToken?: string): Promise<Uint8Array | null> {
   const uniqueUrls = Array.from(new Set((attachmentUrls || []).map((x) => x.trim()).filter(Boolean)))
   if (uniqueUrls.length === 0) return null
 
@@ -285,13 +351,18 @@ async function buildPdfFromAttachmentUrls(attachmentUrls: string[]): Promise<Uin
   let addedPages = 0
 
   for (const url of uniqueUrls) {
-    const bytes = await fetchAttachmentBytes(url)
+    const bytes = await fetchAttachmentBytes(url, bearerToken)
     if (!bytes) continue
     if (isPdf(bytes)) {
       addedPages += await addPdfToPdf(pdf, bytes)
       continue
     }
     if (await addImageToPdf(pdf, bytes)) {
+      addedPages += 1
+      continue
+    }
+    const normalized = await normalizeRasterBytesForPdf(bytes)
+    if (normalized && (await addImageToPdf(pdf, normalized))) {
       addedPages += 1
     }
   }
@@ -336,6 +407,8 @@ async function processJob(jobId: string): Promise<void> {
         : null
     if (!job) return
 
+    const bearerToken = queued?.token
+
     await patchJobInternal(jobId, { status: 'processing', progress: 5, errorMessage: null, completedAt: null })
     await mkdir(EXPORT_ROOT, { recursive: true })
 
@@ -354,7 +427,7 @@ async function processJob(jobId: string): Promise<void> {
         await patchJobInternal(jobId, { progress: Math.min(percent, 90) })
 
         const group = groups[i]
-        const pdfBytes = await buildPdfFromAttachmentUrls(group.attachmentUrls)
+        const pdfBytes = await buildPdfFromAttachmentUrls(group.attachmentUrls, bearerToken)
         if (!pdfBytes) continue
 
         zip.file(`submission-${toSafeBaseName(group.submissionId)}.pdf`, Buffer.from(pdfBytes))
@@ -383,7 +456,7 @@ async function processJob(jobId: string): Promise<void> {
       return
     }
 
-    const pdfBytes = await buildPdfFromAttachmentUrls(job.attachmentUrls)
+    const pdfBytes = await buildPdfFromAttachmentUrls(job.attachmentUrls, bearerToken)
     if (!pdfBytes) {
       await markFailed(jobId, 'لا توجد ملفات قابلة للتحويل (صور أو PDF).')
       return
