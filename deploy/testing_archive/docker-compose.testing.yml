@@ -1,0 +1,86 @@
+# Staging/testing stack — separate volumes, ports, and domains from production archive.
+# Frontend: https://testingarchive.hamaprov.net  → 127.0.0.1:5161
+# API:       https://apitestingarchive.hamaprov.net → 127.0.0.1:5061
+#
+# From this directory:
+#   docker compose -f docker-compose.testing.yml --env-file .env.testing up -d --build
+
+services:
+  testing-archive-db:
+    image: postgres:15-alpine
+    container_name: testing-archive-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5437:5432"
+    volumes:
+      - testing_archive_pg_data:/var/lib/postgresql/data
+    networks:
+      - testing_archive_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  testing-archive-api:
+    build:
+      context: ../../aspforms
+      dockerfile: Dockerfile.prod
+    container_name: testing-archive-api
+    restart: unless-stopped
+    depends_on:
+      testing-archive-db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=testing-archive-db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD};Minimum Pool Size=2;Maximum Pool Size=40;Connection Idle Lifetime=120;Timeout=30;Command Timeout=120
+      JwtSettings__SecretKey: ${JWT_SECRET}
+      JwtSettings__Issuer: ${JWT_ISSUER}
+      JwtSettings__Audience: ${JWT_AUDIENCE}
+      JwtSettings__ExpirationInMinutes: ${JWT_EXP_MIN}
+      JwtSettings__RefreshTokenExpirationInDays: ${JWT_REFRESH_DAYS}
+      AttachmentEncryption__KeyBase64: ${ATTACHMENT_ENCRYPTION_KEY_BASE64}
+      AttachmentPdfJobs__InternalApiKey: ${ATTACHMENT_PDF_JOBS_INTERNAL_API_KEY}
+    volumes:
+      - testing_archive_uploads:/app/data/uploads_private
+    ports:
+      - "127.0.0.1:5061:5000"
+    networks:
+      - testing_archive_net
+
+  testing-archive-front:
+    build:
+      context: ../../forms_front
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://apitestingarchive.hamaprov.net/api
+    container_name: testing-archive-front
+    restart: unless-stopped
+    depends_on:
+      - testing-archive-api
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://apitestingarchive.hamaprov.net/api
+      ATTACHMENT_ENCRYPTION_KEY_BASE64: ${ATTACHMENT_ENCRYPTION_KEY_BASE64}
+      ATTACHMENT_PDF_JOBS_INTERNAL_API_KEY: ${ATTACHMENT_PDF_JOBS_INTERNAL_API_KEY}
+    volumes:
+      - testing_archive_uploads:/app/data/uploads_private
+    ports:
+      - "127.0.0.1:5161:5155"
+    networks:
+      - testing_archive_net
+
+networks:
+  testing_archive_net:
+    name: testing_archive_net
+
+volumes:
+  testing_archive_pg_data:
+    name: testing_archive_pg_data
+  testing_archive_uploads:
+    name: testing_archive_uploads

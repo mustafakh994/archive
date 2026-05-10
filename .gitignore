@@ -26,8 +26,12 @@ Desktop.ini
 # Secrets and local env
 .env
 **/.env
+.env.testing
+**/.env.testing
 !.env.example
 !**/.env.example
+!.env.testing.example
+!**/.env.testing.example
 
 # Local dev keys / caches
 forms_front/.cache/

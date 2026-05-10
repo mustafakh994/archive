@@ -1,0 +1,76 @@
+# Copy to /etc/nginx/sites-available/testingarchive.hamaprov.net and enable:
+#   sudo ln -sf /etc/nginx/sites-available/testingarchive.hamaprov.net /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# Installed on vm-hosting-linux 2026-05-10. Cert: /etc/letsencrypt/live/testingarchive.hamaprov.net/
+# (SAN: apitestingarchive.hamaprov.net, testingarchive.hamaprov.net)
+
+server {
+    listen 80;
+    server_name testingarchive.hamaprov.net;
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 80;
+    server_name apitestingarchive.hamaprov.net;
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name testingarchive.hamaprov.net;
+    client_max_body_size 0;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+
+    ssl_certificate /etc/letsencrypt/live/testingarchive.hamaprov.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/testingarchive.hamaprov.net/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:5161;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection upgrade;
+        proxy_set_header Upgrade $http_upgrade;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name apitestingarchive.hamaprov.net;
+    client_max_body_size 0;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+
+    ssl_certificate /etc/letsencrypt/live/testingarchive.hamaprov.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/testingarchive.hamaprov.net/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:5061;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection upgrade;
+        proxy_set_header Upgrade $http_upgrade;
+    }
+}
